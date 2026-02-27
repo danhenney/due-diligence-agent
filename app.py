@@ -10,13 +10,37 @@ from datetime import datetime
 from pathlib import Path
 
 REPORTS_DIR = Path("reports")
+_JOBS_DIR = REPORTS_DIR / "jobs"
 
-# ── Background job store ───────────────────────────────────────────────────────
-# Module-level dict so it survives Streamlit reruns and page navigation.
-# Keys: job_id → {status, progress, result, pdf_bytes, error}
-_JOBS: dict = {}
-_JOBS_LOCK = threading.Lock()
 
+# ── File-based job state (survives multi-process + navigation) ─────────────────
+
+def _job_file(job_id: str) -> Path:
+    _JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    return _JOBS_DIR / f"{job_id}.json"
+
+
+def _read_job(job_id: str) -> dict:
+    f = _job_file(job_id)
+    try:
+        if f.exists():
+            return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {"status": "unknown", "progress": [], "error": None, "start_time": None}
+
+
+def _update_job(job_id: str, updates: dict) -> None:
+    """Merge updates into the job file using an atomic tmp→rename write."""
+    f = _job_file(job_id)
+    data = _read_job(job_id)
+    data.update(updates)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(f)
+
+
+# ── History ────────────────────────────────────────────────────────────────────
 
 def _load_history() -> list[dict]:
     hist_file = REPORTS_DIR / "history.json"
@@ -36,9 +60,10 @@ def _save_history_entry(entry: dict) -> None:
     hist_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+# ── Background worker ──────────────────────────────────────────────────────────
+
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
-    """Runs in a daemon thread. Calls node functions directly — avoids LangGraph
-    stream()/asyncio conflicts in background threads."""
+    """Daemon thread — calls pipeline nodes directly, writes progress to disk."""
     try:
         import pdf_report
         from graph.workflow import (
@@ -55,22 +80,19 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
             result = fn(state)
             state.update(result)
             progress.append(node_name)
-            with _JOBS_LOCK:
-                _JOBS[job_id]["progress"] = progress.copy()
+            _update_job(job_id, {"progress": progress.copy()})
 
-        _step(input_processor,    "input_processor")
-        _step(phase1_parallel,    "phase1_parallel")
-        _step(phase1_aggregator,  "phase1_aggregator")
-        _step(phase2_parallel,    "phase2_parallel")
-        _step(phase2_aggregator,  "phase2_aggregator")
-        _step(fact_checker_node,  "fact_checker")
-        _step(stress_test_node,   "stress_test")
-        _step(completeness_node,  "completeness")
-        _step(final_report_node,  "final_report_agent")
+        _step(input_processor,   "input_processor")
+        _step(phase1_parallel,   "phase1_parallel")
+        _step(phase1_aggregator, "phase1_aggregator")
+        _step(phase2_parallel,   "phase2_parallel")
+        _step(phase2_aggregator, "phase2_aggregator")
+        _step(fact_checker_node, "fact_checker")
+        _step(stress_test_node,  "stress_test")
+        _step(completeness_node, "completeness")
+        _step(final_report_node, "final_report_agent")
 
         pdf_path = pdf_report.generate_pdf(state, job_id)
-        with open(pdf_path, "rb") as fh:
-            pdf_bytes = fh.read()
 
         _save_history_entry({
             "id": job_id,
@@ -80,15 +102,15 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
             "pdf_path": str(pdf_path),
         })
 
-        with _JOBS_LOCK:
-            _JOBS[job_id]["status"] = "complete"
-            _JOBS[job_id]["result"] = state
-            _JOBS[job_id]["pdf_bytes"] = pdf_bytes
+        _update_job(job_id, {
+            "status": "complete",
+            "pdf_path": str(pdf_path),
+            "recommendation": (state.get("recommendation") or "WATCH").upper(),
+            "final_report": state.get("final_report") or "",
+        })
 
     except Exception as exc:
-        with _JOBS_LOCK:
-            _JOBS[job_id]["status"] = "error"
-            _JOBS[job_id]["error"] = str(exc)
+        _update_job(job_id, {"status": "error", "error": str(exc)})
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -174,12 +196,10 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# If there's an active job, redirect to the running screen automatically
+# If there's an active job still running, redirect to the running screen automatically
 _active_job = st.session_state.get("job_id")
 if _active_job and st.session_state.phase not in ("running", "results", "history"):
-    with _JOBS_LOCK:
-        _job_status = _JOBS.get(_active_job, {}).get("status")
-    if _job_status == "running":
+    if _read_job(_active_job).get("status") == "running":
         st.session_state.phase = "running"
 
 # ── Node display labels (used in st.status) ───────────────────────────────────
@@ -604,10 +624,12 @@ if st.session_state.phase == "form":
             "current_phase": "init",
         }
 
-        with _JOBS_LOCK:
-            _JOBS[job_id] = {"status": "running", "progress": [], "result": None,
-                             "pdf_bytes": None, "error": None,
-                             "start_time": time.time()}
+        _update_job(job_id, {
+            "status": "running",
+            "progress": [],
+            "error": None,
+            "start_time": time.time(),
+        })
 
         t = threading.Thread(
             target=_analysis_worker,
@@ -629,14 +651,17 @@ elif st.session_state.phase == "running":
     job_id = st.session_state.get("job_id", "")
     company = st.session_state.get("company", "")
 
-    with _JOBS_LOCK:
-        job = dict(_JOBS.get(job_id, {"status": "unknown", "progress": [], "error": None}))
+    job = _read_job(job_id)
 
     if job["status"] == "complete":
-        # Move results into session state and show results screen
-        st.session_state.result = job["result"]
-        st.session_state.pdf_bytes = job["pdf_bytes"]
-        st.session_state.history_pdf_cache[job_id] = job["pdf_bytes"]
+        pdf_path = job.get("pdf_path", "")
+        pdf_bytes = Path(pdf_path).read_bytes() if pdf_path and Path(pdf_path).exists() else b""
+        st.session_state.result = {
+            "final_report":   job.get("final_report", ""),
+            "recommendation": job.get("recommendation", "WATCH"),
+        }
+        st.session_state.pdf_bytes = pdf_bytes
+        st.session_state.history_pdf_cache[job_id] = pdf_bytes
         st.session_state.phase = "results"
         st.rerun()
 
@@ -774,12 +799,9 @@ elif st.session_state.phase == "history":
     _back_job = st.session_state.get("job_id")
     _back_label = "← Back"
     _back_phase = "form"
-    if _back_job:
-        with _JOBS_LOCK:
-            _back_status = _JOBS.get(_back_job, {}).get("status")
-        if _back_status == "running":
-            _back_label = "← Back to Running Analysis"
-            _back_phase = "running"
+    if _back_job and _read_job(_back_job).get("status") == "running":
+        _back_label = "← Back to Running Analysis"
+        _back_phase = "running"
     if st.button(_back_label):
         st.session_state.phase = _back_phase
         st.rerun()
