@@ -62,6 +62,21 @@ def run_agent(
     Handles multi-turn tool calls automatically. Returns the final structured
     response parsed from the last assistant text block, or {"raw": text}.
     """
+    # Always append the tool-fallback instruction so Claude gracefully
+    # degrades when a data tool hits a quota limit or returns an error.
+    has_web_search = any(t.get("name") == "web_search" for t in tools)
+    fallback_note = (
+        "\n\nTOOL FALLBACK RULE: If any tool call returns an error or a response "
+        "containing '\"error\"', do NOT stop. "
+        + (
+            "Use web_search or news_search to find the same information instead. "
+            if has_web_search else
+            "Skip that data point, note it as unavailable, and continue your analysis. "
+        )
+        + "Always complete your full analysis regardless of individual tool failures."
+    )
+    system_prompt = system_prompt + fallback_note
+
     if language.lower() != "english":
         system_prompt = (
             system_prompt

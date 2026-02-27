@@ -82,17 +82,50 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
 
 
 def execute_tool_call(tool_name: str, tool_input: dict) -> str:
-    """Route and execute a tool call, returning the result as a string."""
-    # Tavily tools
-    if tool_name in ("web_search", "news_search"):
-        return tavily_tools.execute_tool(tool_name, tool_input)
-    # EDGAR tools
-    if tool_name in ("get_sec_filings", "get_company_facts"):
-        return edgar_tools.execute_tool(tool_name, tool_input)
-    # PDF tools
-    if tool_name in ("extract_pdf_text", "extract_pdf_tables"):
-        return pdf_tools.execute_tool(tool_name, tool_input)
-    # yfinance tools
-    if tool_name in ("yf_get_info", "yf_get_financials", "yf_get_analyst_data"):
-        return yfinance_tools.execute_tool(tool_name, tool_input)
-    raise ValueError(f"Unknown tool: {tool_name}")
+    """Route and execute a tool call, returning the result as a string.
+
+    Never raises — on any failure returns a structured JSON error so the
+    agent can fall back to web_search instead of crashing.
+    """
+    try:
+        # Tavily tools
+        if tool_name in ("web_search", "news_search"):
+            return tavily_tools.execute_tool(tool_name, tool_input)
+        # EDGAR tools
+        if tool_name in ("get_sec_filings", "get_company_facts"):
+            return edgar_tools.execute_tool(tool_name, tool_input)
+        # PDF tools
+        if tool_name in ("extract_pdf_text", "extract_pdf_tables"):
+            return pdf_tools.execute_tool(tool_name, tool_input)
+        # yfinance tools
+        if tool_name in ("yf_get_info", "yf_get_financials", "yf_get_analyst_data"):
+            return yfinance_tools.execute_tool(tool_name, tool_input)
+        return _tool_error(tool_name, f"Unknown tool '{tool_name}'", "web_search")
+    except Exception as exc:
+        return _tool_error(tool_name, str(exc), _fallback_for(tool_name))
+
+
+def _fallback_for(tool_name: str) -> str:
+    """Return the recommended fallback tool name for a given tool."""
+    _fallbacks = {
+        "get_sec_filings":       "web_search",
+        "get_company_facts":     "web_search",
+        "yf_get_info":           "web_search",
+        "yf_get_financials":     "web_search",
+        "yf_get_analyst_data":   "web_search",
+        "extract_pdf_text":      "web_search",
+        "extract_pdf_tables":    "web_search",
+        "news_search":           "web_search",
+    }
+    return _fallbacks.get(tool_name, "web_search")
+
+
+def _tool_error(tool_name: str, message: str, fallback: str) -> str:
+    """Return a structured JSON error that guides the agent to a fallback."""
+    import json
+    return json.dumps({
+        "error": "tool_unavailable",
+        "tool": tool_name,
+        "message": message,
+        "action": f"Use '{fallback}' to find the same information instead.",
+    })
