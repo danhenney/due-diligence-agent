@@ -1,10 +1,9 @@
 """Phase 3 — Stress Test agent (downside scenario analysis)."""
 from __future__ import annotations
 
-import json
-
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import slim_financial, slim_bear, slim_valuation, slim_verification, slim_red_flags, compact
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -64,14 +63,13 @@ Return a JSON object with this exact structure:
 
 
 def run(state: DueDiligenceState) -> dict:
-    context = json.dumps({
-        "company_name": state["company_name"],
-        "financial_report": state.get("financial_report"),
-        "bear_case": state.get("bear_case"),
-        "red_flags": state.get("red_flags"),
-        "valuation": state.get("valuation"),
-        "verification": state.get("verification"),
-    }, indent=2)
+    context = compact({
+        "financial":   slim_financial(state.get("financial_report")),
+        "bear_case":   slim_bear(state.get("bear_case")),
+        "red_flags":   slim_red_flags(state.get("red_flags")),
+        "valuation":   slim_valuation(state.get("valuation")),
+        "verification":slim_verification(state.get("verification")),
+    })
 
     user_message = (
         f"Company: {state['company_name']}\n\n"

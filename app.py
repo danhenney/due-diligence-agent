@@ -1,8 +1,31 @@
 """Streamlit web UI for the Due Diligence Agent."""
+import json
 import os
 import shutil
 import tempfile
 import uuid
+from datetime import datetime
+from pathlib import Path
+
+REPORTS_DIR = Path("reports")
+
+
+def _load_history() -> list[dict]:
+    hist_file = REPORTS_DIR / "history.json"
+    if hist_file.exists():
+        try:
+            return json.loads(hist_file.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_history_entry(entry: dict) -> None:
+    hist_file = REPORTS_DIR / "history.json"
+    history = _load_history()
+    history.insert(0, entry)
+    REPORTS_DIR.mkdir(exist_ok=True)
+    hist_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
 
 import streamlit as st
 
@@ -79,6 +102,7 @@ for key, default in [
     ("result", None),
     ("pdf_bytes", None),
     ("company", ""),
+    ("history_pdf_cache", {}),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -394,8 +418,15 @@ def render_agent_card(agent: dict):
 if st.session_state.phase == "form":
 
     # ── Header ────────────────────────────────────────────────────────────────
-    st.markdown("## 📊 Due Diligence Agent")
-    st.caption("Submit a company → 13 AI agents analyze it in 4 phases → full investment memo + PDF")
+    hdr_col, hist_col = st.columns([5, 1])
+    with hdr_col:
+        st.markdown("## 📊 Due Diligence Agent")
+        st.caption("Submit a company → 13 AI agents analyze it in 4 phases → full investment memo + PDF")
+    with hist_col:
+        st.markdown("")
+        if st.button("🕐 History", use_container_width=True):
+            st.session_state.phase = "history"
+            st.rerun()
     st.divider()
 
     # ── Two-column layout: form left, pipeline right ──────────────────────────
@@ -408,7 +439,7 @@ if st.session_state.phase == "form":
             placeholder="e.g. Apple, OpenAI, Stripe",
         )
         url = st.text_input(
-            "Website URL *(optional)*",
+            "Website URL *(required — improves research quality)*",
             placeholder="https://example.com",
         )
         uploaded_files = st.file_uploader(
@@ -421,7 +452,7 @@ if st.session_state.phase == "form":
         run = st.button(
             "🔍  Run Due Diligence",
             type="primary",
-            disabled=not (company or "").strip(),
+            disabled=not ((company or "").strip() and (url or "").strip()),
             use_container_width=True,
         )
 
@@ -508,6 +539,16 @@ if st.session_state.phase == "form":
             with open(pdf_path, "rb") as fh:
                 pdf_bytes = fh.read()
 
+            # Save to history
+            _save_history_entry({
+                "id": job_id,
+                "company": company.strip(),
+                "recommendation": (merged.get("recommendation") or "WATCH").upper(),
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "pdf_path": str(pdf_path),
+            })
+            st.session_state.history_pdf_cache[job_id] = pdf_bytes
+
             st.session_state.result = merged
             st.session_state.pdf_bytes = pdf_bytes
             st.session_state.phase = "results"
@@ -545,7 +586,7 @@ elif st.session_state.phase == "results":
     st.caption(rec_desc)
     st.divider()
 
-    col_dl, col_reset, _ = st.columns([1, 1, 2])
+    col_dl, col_reset, col_hist, _ = st.columns([1, 1, 1, 1])
     with col_dl:
         if st.session_state.pdf_bytes:
             st.download_button(
@@ -562,6 +603,10 @@ elif st.session_state.phase == "results":
             st.session_state.result = None
             st.session_state.pdf_bytes = None
             st.rerun()
+    with col_hist:
+        if st.button("🕐  History", use_container_width=True):
+            st.session_state.phase = "history"
+            st.rerun()
 
     st.divider()
 
@@ -570,3 +615,64 @@ elif st.session_state.phase == "results":
         st.markdown(final_report)
     else:
         st.info("No report content was generated.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCREEN 3 — HISTORY
+# ─────────────────────────────────────────────────────────────────────────────
+elif st.session_state.phase == "history":
+    st.markdown("## 🕐 Analysis History")
+    st.caption("All due diligence reports generated on this machine.")
+    if st.button("← Back to New Analysis"):
+        st.session_state.phase = "form"
+        st.rerun()
+    st.divider()
+
+    history = _load_history()
+
+    if not history:
+        st.info("No analyses yet. Submit a company on the main page to get started.")
+    else:
+        badge_css = {
+            "INVEST": ("background:#dcfce7;color:#15803d", "INVEST"),
+            "WATCH":  ("background:#fef3c7;color:#b45309", "WATCH"),
+            "PASS":   ("background:#fee2e2;color:#b91c1c", "PASS"),
+        }
+        for entry in history:
+            rec = (entry.get("recommendation") or "WATCH").upper()
+            style, label = badge_css.get(rec, badge_css["WATCH"])
+            badge_html = (
+                f"<span style='{style};padding:3px 12px;border-radius:8px;"
+                f"font-weight:700;font-size:0.85rem'>{label}</span>"
+            )
+            col_name, col_rec, col_date, col_dl = st.columns([2.5, 1, 1.5, 1])
+            with col_name:
+                st.markdown(f"**{entry.get('company', '—')}**")
+            with col_rec:
+                st.markdown(badge_html, unsafe_allow_html=True)
+            with col_date:
+                st.caption(entry.get("date", ""))
+            with col_dl:
+                job_id = entry.get("id", "")
+                pdf_bytes = st.session_state.history_pdf_cache.get(job_id)
+                if pdf_bytes is None:
+                    pdf_path = entry.get("pdf_path", "")
+                    if pdf_path and Path(pdf_path).exists():
+                        try:
+                            pdf_bytes = Path(pdf_path).read_bytes()
+                            st.session_state.history_pdf_cache[job_id] = pdf_bytes
+                        except Exception:
+                            pdf_bytes = None
+                if pdf_bytes:
+                    fname = f"dd_{entry.get('company','report').replace(' ','_')}.pdf"
+                    st.download_button(
+                        label="⬇️ PDF",
+                        data=pdf_bytes,
+                        file_name=fname,
+                        mime="application/pdf",
+                        key=f"dl_{job_id}",
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("PDF unavailable")
+            st.divider()

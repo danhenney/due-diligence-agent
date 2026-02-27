@@ -1,10 +1,9 @@
 """Phase 2 — Red Flag Hunter agent (cross-report inconsistency detection)."""
 from __future__ import annotations
 
-import json
-
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import slim_financial, slim_market, slim_legal, slim_management, slim_tech, compact
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -47,13 +46,13 @@ Return a JSON object with this exact structure:
 
 
 def run(state: DueDiligenceState) -> dict:
-    all_reports = json.dumps({
-        "financial_report": state.get("financial_report"),
-        "market_report": state.get("market_report"),
-        "legal_report": state.get("legal_report"),
-        "management_report": state.get("management_report"),
-        "tech_report": state.get("tech_report"),
-    }, indent=2)
+    all_reports = compact({
+        "financial":  slim_financial(state.get("financial_report")),
+        "market":     slim_market(state.get("market_report")),
+        "legal":      slim_legal(state.get("legal_report")),
+        "management": slim_management(state.get("management_report")),
+        "tech":       slim_tech(state.get("tech_report")),
+    })
 
     user_message = (
         f"Company: {state['company_name']}\n\n"

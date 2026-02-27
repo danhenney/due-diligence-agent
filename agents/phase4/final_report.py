@@ -6,6 +6,11 @@ from datetime import date
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import (
+    slim_financial, slim_market, slim_legal, slim_management, slim_tech,
+    slim_bull, slim_bear, slim_valuation, slim_red_flags,
+    slim_verification, slim_stress, slim_completeness, compact,
+)
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -53,22 +58,20 @@ After the memo, output a JSON block on its own line:
 
 
 def run(state: DueDiligenceState) -> dict:
-    full_package = json.dumps({
-        "company_name": state["company_name"],
-        "company_url": state.get("company_url"),
-        "financial_report": state.get("financial_report"),
-        "market_report": state.get("market_report"),
-        "legal_report": state.get("legal_report"),
-        "management_report": state.get("management_report"),
-        "tech_report": state.get("tech_report"),
-        "bull_case": state.get("bull_case"),
-        "bear_case": state.get("bear_case"),
-        "valuation": state.get("valuation"),
-        "red_flags": state.get("red_flags"),
-        "verification": state.get("verification"),
-        "stress_test": state.get("stress_test"),
-        "completeness": state.get("completeness"),
-    }, indent=2)
+    full_package = compact({
+        "financial":   slim_financial(state.get("financial_report")),
+        "market":      slim_market(state.get("market_report")),
+        "legal":       slim_legal(state.get("legal_report")),
+        "management":  slim_management(state.get("management_report")),
+        "tech":        slim_tech(state.get("tech_report")),
+        "bull_case":   slim_bull(state.get("bull_case")),
+        "bear_case":   slim_bear(state.get("bear_case")),
+        "valuation":   slim_valuation(state.get("valuation")),
+        "red_flags":   slim_red_flags(state.get("red_flags")),
+        "verification":slim_verification(state.get("verification")),
+        "stress_test": slim_stress(state.get("stress_test")),
+        "completeness":slim_completeness(state.get("completeness")),
+    })
 
     today = date.today().isoformat()
 

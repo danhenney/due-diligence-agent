@@ -1,10 +1,9 @@
 """Phase 3 — Fact Checker agent (cross-reference all claims)."""
 from __future__ import annotations
 
-import json
-
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import slim_financial, slim_market, slim_management, slim_tech, slim_bull, slim_bear, slim_red_flags, compact
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -48,16 +47,15 @@ Return a JSON object with this exact structure:
 
 
 def run(state: DueDiligenceState) -> dict:
-    all_context = json.dumps({
-        "company_name": state["company_name"],
-        "financial_report": state.get("financial_report"),
-        "market_report": state.get("market_report"),
-        "management_report": state.get("management_report"),
-        "tech_report": state.get("tech_report"),
-        "bull_case": state.get("bull_case"),
-        "bear_case": state.get("bear_case"),
-        "red_flags": state.get("red_flags"),
-    }, indent=2)
+    all_context = compact({
+        "financial":  slim_financial(state.get("financial_report")),
+        "market":     slim_market(state.get("market_report")),
+        "management": slim_management(state.get("management_report")),
+        "tech":       slim_tech(state.get("tech_report")),
+        "bull_case":  slim_bull(state.get("bull_case")),
+        "bear_case":  slim_bear(state.get("bear_case")),
+        "red_flags":  slim_red_flags(state.get("red_flags")),
+    })
 
     user_message = (
         f"Company: {state['company_name']}\n\n"

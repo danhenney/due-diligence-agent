@@ -1,10 +1,9 @@
 """Phase 2 — Valuation agent (DCF, comps, scenario modeling)."""
 from __future__ import annotations
 
-import json
-
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import slim_financial, slim_market, compact
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -57,10 +56,10 @@ Return a JSON object with this exact structure:
 
 
 def run(state: DueDiligenceState) -> dict:
-    phase1_context = json.dumps({
-        "financial_report": state.get("financial_report"),
-        "market_report": state.get("market_report"),
-    }, indent=2)
+    phase1_context = compact({
+        "financial": slim_financial(state.get("financial_report")),
+        "market":    slim_market(state.get("market_report")),
+    })
 
     user_message = (
         f"Company: {state['company_name']}\n\n"
