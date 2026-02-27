@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,81 @@ COLOR_BODY_TEXT = colors.HexColor("#1e293b")
 COLOR_MUTED = colors.HexColor("#64748b")
 COLOR_HR = colors.HexColor("#e2e8f0")
 COLOR_CODE_BG = colors.HexColor("#f1f5f9")
+
+# ── CJK font support ──────────────────────────────────────────────────────────
+
+_CJK_FONT_REGULAR: str | None = None
+_CJK_FONT_BOLD:    str | None = None
+
+
+def _setup_korean_fonts() -> tuple[str, str]:
+    """Register a Korean-capable TTF font pair and return (regular, bold) names.
+
+    Strategy (first that succeeds):
+    1. System font installed by packages.txt (fonts-nanum on Streamlit Cloud)
+    2. Cached download of NanumGothic from Google Fonts GitHub
+    3. ReportLab built-in CID Korean font
+    4. Helvetica fallback (shows boxes but won't crash)
+    """
+    global _CJK_FONT_REGULAR, _CJK_FONT_BOLD
+    if _CJK_FONT_REGULAR:
+        return _CJK_FONT_REGULAR, _CJK_FONT_BOLD  # type: ignore[return-value]
+
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    # 1 — System font paths (Ubuntu/Debian with fonts-nanum)
+    candidates = [
+        ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"),
+        ("/usr/share/fonts/truetype/nanum/NanumGothicRegular.ttf",
+         "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"),
+    ]
+    for reg_path, bold_path in candidates:
+        if os.path.exists(reg_path):
+            try:
+                pdfmetrics.registerFont(TTFont("KoreanRegular", reg_path))
+                bold = bold_path if os.path.exists(bold_path) else reg_path
+                pdfmetrics.registerFont(TTFont("KoreanBold", bold))
+                _CJK_FONT_REGULAR, _CJK_FONT_BOLD = "KoreanRegular", "KoreanBold"
+                return _CJK_FONT_REGULAR, _CJK_FONT_BOLD
+            except Exception:
+                continue
+
+    # 2 — Download NanumGothic and cache locally
+    font_dir = Path("fonts")
+    font_dir.mkdir(exist_ok=True)
+    reg_cache  = font_dir / "NanumGothic-Regular.ttf"
+    bold_cache = font_dir / "NanumGothic-Bold.ttf"
+    _NANUM_URLS = {
+        reg_cache:  "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf",
+        bold_cache: "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Bold.ttf",
+    }
+    try:
+        for dest, url in _NANUM_URLS.items():
+            if not dest.exists():
+                urllib.request.urlretrieve(url, str(dest))
+        if reg_cache.exists():
+            pdfmetrics.registerFont(TTFont("NanumGothic",     str(reg_cache)))
+            pdfmetrics.registerFont(TTFont("NanumGothicBold", str(bold_cache) if bold_cache.exists() else str(reg_cache)))
+            _CJK_FONT_REGULAR, _CJK_FONT_BOLD = "NanumGothic", "NanumGothicBold"
+            return _CJK_FONT_REGULAR, _CJK_FONT_BOLD
+    except Exception:
+        pass
+
+    # 3 — ReportLab built-in CID Korean font
+    try:
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        pdfmetrics.registerFont(UnicodeCIDFont("HYSMyeongJo-Medium"))
+        _CJK_FONT_REGULAR, _CJK_FONT_BOLD = "HYSMyeongJo-Medium", "HYSMyeongJo-Medium"
+        return _CJK_FONT_REGULAR, _CJK_FONT_BOLD
+    except Exception:
+        pass
+
+    # 4 — Graceful fallback (Latin only — boxes for Korean, but won't crash)
+    _CJK_FONT_REGULAR, _CJK_FONT_BOLD = "Helvetica", "Helvetica-Bold"
+    return _CJK_FONT_REGULAR, _CJK_FONT_BOLD
+
 
 RISK_KEYWORDS = {
     "risk", "threat", "concern", "weakness", "challenge", "litigation",
@@ -103,7 +179,8 @@ class _BookmarkDocTemplate(BaseDocTemplate):
 
 # ── Style helpers ─────────────────────────────────────────────────────────────
 
-def _build_styles() -> dict[str, ParagraphStyle]:
+def _build_styles(font_regular: str = "Helvetica",
+                  font_bold: str = "Helvetica-Bold") -> dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
     styles: dict[str, ParagraphStyle] = {}
 
@@ -112,7 +189,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=22,
         leading=28,
-        fontName="Helvetica-Bold",
+        fontName=font_bold,
         textColor=COLOR_BODY_TEXT,
         spaceBefore=18,
         spaceAfter=4,
@@ -122,7 +199,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=15,
         leading=20,
-        fontName="Helvetica-Bold",
+        fontName=font_bold,
         textColor=COLOR_BODY_TEXT,
         spaceBefore=14,
         spaceAfter=2,
@@ -132,7 +209,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=12,
         leading=16,
-        fontName="Helvetica-Bold",
+        fontName=font_bold,
         textColor=COLOR_BODY_TEXT,
         spaceBefore=10,
         spaceAfter=2,
@@ -142,7 +219,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=10,
         leading=14,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_BODY_TEXT,
         alignment=TA_JUSTIFY,
         spaceBefore=2,
@@ -153,7 +230,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=10,
         leading=14,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_BODY_TEXT,
         backColor=COLOR_LIGHT_RED,
         leftIndent=8,
@@ -167,7 +244,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=10,
         leading=14,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_BODY_TEXT,
         backColor=COLOR_LIGHT_GREEN,
         leftIndent=8,
@@ -181,7 +258,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=10,
         leading=14,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_BODY_TEXT,
         leftIndent=8,
         spaceBefore=1,
@@ -192,7 +269,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=13,
         leading=18,
-        fontName="Helvetica-Bold",
+        fontName=font_bold,
         textColor=colors.white,
         alignment=TA_CENTER,
         spaceBefore=10,
@@ -203,7 +280,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=8,
         leading=10,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_MUTED,
         alignment=TA_CENTER,
     )
@@ -212,7 +289,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=32,
         leading=40,
-        fontName="Helvetica-Bold",
+        fontName=font_bold,
         textColor=COLOR_BODY_TEXT,
         alignment=TA_CENTER,
         spaceBefore=0,
@@ -223,7 +300,7 @@ def _build_styles() -> dict[str, ParagraphStyle]:
         parent=base["Normal"],
         fontSize=14,
         leading=20,
-        fontName="Helvetica",
+        fontName=font_regular,
         textColor=COLOR_MUTED,
         alignment=TA_CENTER,
     )
@@ -413,8 +490,15 @@ def generate_pdf(state: dict[str, Any], job_id: str) -> str:
     company = state.get("company_name") or "Unknown Company"
     recommendation = state.get("recommendation") or "WATCH"
     final_report_md = state.get("final_report") or ""
+    language = state.get("language", "English")
 
-    styles = _build_styles()
+    # Set up fonts — use Korean-capable font when needed
+    if language.lower() == "korean":
+        font_regular, font_bold = _setup_korean_fonts()
+    else:
+        font_regular, font_bold = "Helvetica", "Helvetica-Bold"
+
+    styles = _build_styles(font_regular, font_bold)
 
     doc = _BookmarkDocTemplate(
         output_path,
