@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from typing import Any
 
@@ -11,6 +12,23 @@ from config import ANTHROPIC_API_KEY, MODEL_NAME, MAX_TOKENS
 from tools.executor import execute_tool_call
 
 _client: anthropic.Anthropic | None = None
+
+# ── Per-thread token usage accumulator ───────────────────────────────────────
+_tl = threading.local()
+
+
+def _accum_usage(inp: int, out: int) -> None:
+    _tl.input_tokens  = getattr(_tl, "input_tokens",  0) + inp
+    _tl.output_tokens = getattr(_tl, "output_tokens", 0) + out
+
+
+def get_and_reset_usage() -> dict:
+    """Return accumulated token counts for this thread and reset to zero."""
+    inp = getattr(_tl, "input_tokens",  0)
+    out = getattr(_tl, "output_tokens", 0)
+    _tl.input_tokens  = 0
+    _tl.output_tokens = 0
+    return {"input_tokens": inp, "output_tokens": out}
 
 
 def _get_client() -> anthropic.Anthropic:
@@ -65,6 +83,10 @@ def run_agent(
             kwargs["tools"] = tools
 
         response = _create_with_retry(client, **kwargs)
+
+        # Accumulate token usage for this API call
+        if hasattr(response, "usage") and response.usage:
+            _accum_usage(response.usage.input_tokens, response.usage.output_tokens)
 
         tool_use_blocks = []
         text_blocks = []

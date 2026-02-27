@@ -76,6 +76,37 @@ def _save_history_entry(entry: dict) -> None:
     hist_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+# ── Token cost tracking ────────────────────────────────────────────────────────
+
+# claude-sonnet-4-6 pricing (USD per 1M tokens)
+_PRICE_INPUT_PER_M  = 3.00
+_PRICE_OUTPUT_PER_M = 15.00
+
+# Human-readable labels for each agent key
+_AGENT_LABELS = {
+    "financial_analyst": "Financial Analyst",
+    "market_research":   "Market Research",
+    "legal_risk":        "Legal Risk",
+    "management_team":   "Management Team",
+    "tech_product":      "Tech & Product",
+    "bull_case":         "Bull Case",
+    "bear_case":         "Bear Case",
+    "valuation":         "Valuation",
+    "red_flag":          "Red Flag Hunter",
+    "fact_checker":      "Fact Checker",
+    "stress_test":       "Stress Test",
+    "completeness":      "Completeness",
+    "final_report_agent":"Final Report",
+}
+
+# Display order
+_AGENT_ORDER = list(_AGENT_LABELS.keys())
+
+
+def _cost_usd(inp: int, out: int) -> float:
+    return inp / 1_000_000 * _PRICE_INPUT_PER_M + out / 1_000_000 * _PRICE_OUTPUT_PER_M
+
+
 # ── Background worker ──────────────────────────────────────────────────────────
 
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
@@ -94,6 +125,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
     """Inner worker — runs all pipeline nodes and writes results to disk."""
     try:
         import pdf_report
+        from agents.base import get_and_reset_usage
         from graph.workflow import (
             input_processor, phase1_parallel, phase1_aggregator,
             phase2_parallel, phase2_aggregator,
@@ -103,12 +135,40 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
 
         state: dict = dict(initial_state)
         progress: list[str] = []
+        token_usage: dict = {}   # agent_key -> {input_tokens, output_tokens, cost_usd}
+
+        # Nodes that don't call the LLM (no cost to track)
+        _NO_LLM_NODES = {"input_processor", "phase1_aggregator", "phase2_aggregator"}
 
         def _step(fn, node_name: str) -> None:
             result = fn(state)
             state.update(result)
             progress.append(node_name)
-            _update_job(job_id, {"progress": progress.copy()})
+
+            if node_name in ("phase1_parallel", "phase2_parallel"):
+                # Per-sub-agent usage is captured inside workflow.py and
+                # returned in state["__agent_usage__"]
+                for agent_key, usage in (state.pop("__agent_usage__", {}) or {}).items():
+                    token_usage[agent_key] = {
+                        "input_tokens":  usage["input_tokens"],
+                        "output_tokens": usage["output_tokens"],
+                        "cost_usd":      _cost_usd(usage["input_tokens"], usage["output_tokens"]),
+                    }
+            elif node_name not in _NO_LLM_NODES:
+                # Sequential agent — usage is on this thread
+                usage = get_and_reset_usage()
+                # node_name for phase3/4 agents matches the agent key
+                agent_key = node_name
+                token_usage[agent_key] = {
+                    "input_tokens":  usage["input_tokens"],
+                    "output_tokens": usage["output_tokens"],
+                    "cost_usd":      _cost_usd(usage["input_tokens"], usage["output_tokens"]),
+                }
+
+            _update_job(job_id, {
+                "progress":    progress.copy(),
+                "token_usage": token_usage.copy(),
+            })
 
         _step(input_processor,   "input_processor")
         _step(phase1_parallel,   "phase1_parallel")
@@ -131,10 +191,11 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         })
 
         _update_job(job_id, {
-            "status": "complete",
-            "pdf_path": str(pdf_path),
+            "status":         "complete",
+            "pdf_path":       str(pdf_path),
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
-            "final_report": state.get("final_report") or "",
+            "final_report":   state.get("final_report") or "",
+            "token_usage":    token_usage,
         })
 
     except Exception as exc:
@@ -611,6 +672,10 @@ if st.session_state.phase == "form":
             help="Pitch decks, 10-Ks, annual reports, etc.",
         )
         st.markdown("")
+        st.caption(
+            "Typical cost: **$1 – $5 per analysis** · 13 agents · claude-sonnet-4-6 · "
+            "$3/M input · $15/M output"
+        )
         run = st.button(
             "🔍  Run Due Diligence",
             type="primary",
@@ -718,6 +783,7 @@ elif st.session_state.phase == "running":
         st.session_state.result = {
             "final_report":   job.get("final_report", ""),
             "recommendation": job.get("recommendation", "WATCH"),
+            "token_usage":    job.get("token_usage", {}),
         }
         st.session_state.pdf_bytes = pdf_bytes
         st.session_state.history_pdf_cache[job_id] = pdf_bytes
@@ -787,12 +853,40 @@ elif st.session_state.phase == "running":
         steps_total = len(NODE_LABELS)
         st.progress(pct, text=f"**{int(pct * 100)}%** — step {steps_done} of {steps_total}  ·  elapsed {elapsed_str}  ·  {eta_str}")
 
+        # ── Live cost tracker ──────────────────────────────────────────────
+        token_usage = job.get("token_usage") or {}
+        total_cost = sum(v.get("cost_usd", 0) for v in token_usage.values())
+        total_in   = sum(v.get("input_tokens", 0)  for v in token_usage.values())
+        total_out  = sum(v.get("output_tokens", 0) for v in token_usage.values())
+        if token_usage:
+            st.caption(
+                f"**API cost so far: ${total_cost:.4f}**  ·  "
+                f"{total_in:,} input tokens  ·  {total_out:,} output tokens  ·  "
+                f"Pricing: $3/M input · $15/M output (claude-sonnet-4-6)"
+            )
+
         st.markdown("")
 
         # ── Completed steps ────────────────────────────────────────────────
         for node in progress:
             label = NODE_LABELS.get(node, node.replace("_", " ").title())
-            st.write(f"✓ {label}")
+            # Show per-node cost for steps that use the LLM
+            if node in ("phase1_parallel", "phase2_parallel"):
+                phase_agents = (
+                    ["financial_analyst","market_research","legal_risk","management_team","tech_product"]
+                    if node == "phase1_parallel" else
+                    ["bull_case","bear_case","valuation","red_flag"]
+                )
+                phase_cost = sum(token_usage.get(a, {}).get("cost_usd", 0) for a in phase_agents)
+                st.write(f"✓ {label}  —  ${phase_cost:.4f}")
+            elif node not in ("input_processor", "phase1_aggregator", "phase2_aggregator"):
+                node_cost = token_usage.get(node, {}).get("cost_usd", 0)
+                if node_cost:
+                    st.write(f"✓ {NODE_LABELS.get(node, node)}  —  ${node_cost:.4f}")
+                else:
+                    st.write(f"✓ {NODE_LABELS.get(node, node)}")
+            else:
+                st.write(f"✓ {label}")
 
         # ── Current step spinner ───────────────────────────────────────────
         completed_set = set(progress)
@@ -853,6 +947,42 @@ elif st.session_state.phase == "results":
         if st.button("🕐  History", use_container_width=True):
             st.session_state.phase = "history"
             st.rerun()
+
+    st.divider()
+
+    # ── Token usage & cost breakdown ───────────────────────────────────────────
+    token_usage: dict = result.get("token_usage") or {}
+    if token_usage:
+        total_in   = sum(v.get("input_tokens",  0) for v in token_usage.values())
+        total_out  = sum(v.get("output_tokens", 0) for v in token_usage.values())
+        total_cost = sum(v.get("cost_usd",      0) for v in token_usage.values())
+
+        with st.expander(f"Token Usage & Cost  —  **${total_cost:.4f} total**", expanded=False):
+            st.caption("Pricing: claude-sonnet-4-6 · $3.00 / 1M input tokens · $15.00 / 1M output tokens")
+            st.markdown("")
+
+            # Table rows in display order
+            rows = []
+            for key in _AGENT_ORDER:
+                if key not in token_usage:
+                    continue
+                v = token_usage[key]
+                rows.append({
+                    "Agent":          _AGENT_LABELS.get(key, key),
+                    "Input tokens":   f"{v.get('input_tokens',  0):,}",
+                    "Output tokens":  f"{v.get('output_tokens', 0):,}",
+                    "Cost (USD)":     f"${v.get('cost_usd', 0):.4f}",
+                })
+
+            # Summary row
+            rows.append({
+                "Agent":         "**TOTAL**",
+                "Input tokens":  f"**{total_in:,}**",
+                "Output tokens": f"**{total_out:,}**",
+                "Cost (USD)":    f"**${total_cost:.4f}**",
+            })
+
+            st.table(rows)
 
     st.divider()
 

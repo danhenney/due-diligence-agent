@@ -22,6 +22,18 @@ from agents.phase1 import (
 from agents.phase2 import bull_case, bear_case, valuation, red_flag
 from agents.phase3 import fact_checker, stress_test, completeness
 from agents.phase4 import final_report
+from agents.base import get_and_reset_usage
+
+
+def _run_agent_with_usage(fn, state: Any) -> tuple[dict, dict]:
+    """Run an agent function and return (result, token_usage) tuple.
+
+    Captures the thread-local usage counter so parallel phases can collect
+    per-sub-agent token counts from their worker threads.
+    """
+    result = fn(state)
+    usage = get_and_reset_usage()
+    return result, usage
 
 
 # ── Node implementations ──────────────────────────────────────────────────────
@@ -54,6 +66,7 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
 
     merged: dict[str, Any] = {"current_phase": "phase1_done"}
     errors = []
+    agent_usage: dict[str, dict] = {}
 
     # Stagger starts by 3 s to avoid all 5 agents hitting the API simultaneously
     # and triggering rate-limit backoffs that stack.
@@ -62,16 +75,18 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
         for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
             if i > 0:
                 _time.sleep(3)
-            future_to_name[executor.submit(fn, state)] = name
+            future_to_name[executor.submit(_run_agent_with_usage, fn, state)] = name
 
         for future in as_completed(future_to_name):
             name = future_to_name[future]
             try:
-                result = future.result()
+                result, usage = future.result()
                 merged.update(result)
+                agent_usage[name] = usage
             except Exception as exc:
                 errors.append(f"{name} failed: {exc}")
 
+    merged["__agent_usage__"] = agent_usage
     if errors:
         merged["errors"] = errors
 
@@ -91,25 +106,28 @@ def phase2_parallel(state: DueDiligenceState) -> dict:
     merged: dict[str, Any] = {"current_phase": "phase2_done"}
     errors = []
     all_red_flags: list[dict] = list(state.get("red_flags") or [])
+    agent_usage: dict[str, dict] = {}
 
     future_to_name: dict = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
         for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
             if i > 0:
                 _time.sleep(3)
-            future_to_name[executor.submit(fn, state)] = name
+            future_to_name[executor.submit(_run_agent_with_usage, fn, state)] = name
 
         for future in as_completed(future_to_name):
             name = future_to_name[future]
             try:
-                result = future.result()
+                result, usage = future.result()
                 if "red_flags" in result:
                     all_red_flags.extend(result.pop("red_flags", []))
                 merged.update(result)
+                agent_usage[name] = usage
             except Exception as exc:
                 errors.append(f"{name} failed: {exc}")
 
     merged["red_flags"] = all_red_flags
+    merged["__agent_usage__"] = agent_usage
     if errors:
         merged["errors"] = errors
 
