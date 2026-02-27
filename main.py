@@ -81,9 +81,11 @@ def main(
         "completeness": None,
         "final_report": None,
         "recommendation": None,
+        "orchestrator_briefing": None,
         "messages": [],
         "errors": [],
         "current_phase": "init",
+        "language": "English",
     }
 
     run_id = thread_id or str(uuid.uuid4())
@@ -111,11 +113,14 @@ def main(
         "input_processor": "Initializing analysis...",
         "phase1_parallel": "Phase 1: Running specialist agents in parallel (Financial, Market, Legal, Management, Tech)...",
         "phase1_aggregator": "Phase 1 complete. Aggregating...",
+        "phase1_check": "Orchestrator: Scoring Phase 1 agents, revising weak ones...",
         "phase2_parallel": "Phase 2: Building thesis (Bull Case, Bear Case, Valuation, Red Flags)...",
         "phase2_aggregator": "Phase 2 complete. Aggregating...",
+        "phase2_check": "Orchestrator: Scoring Phase 2 agents, revising weak ones...",
         "fact_checker": "Phase 3: Fact-checking all claims...",
         "stress_test": "Phase 3: Running stress tests...",
         "completeness": "Phase 3: Checking completeness...",
+        "phase3_check": "Orchestrator: Scoring Phase 3 agents + final synthesis...",
         "final_report_agent": "Phase 4: Generating Investment Memo...",
     }
 

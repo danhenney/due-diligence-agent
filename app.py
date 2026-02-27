@@ -96,7 +96,9 @@ _AGENT_LABELS_EN = {
     "fact_checker":      "Fact Checker",
     "stress_test":       "Stress Test",
     "completeness":      "Completeness",
-    "orchestrator":      "Orchestrator",
+    "phase1_check":      "Phase 1 Check",
+    "phase2_check":      "Phase 2 Check",
+    "phase3_check":      "Phase 3 Check & Synthesis",
     "final_report_agent":"Final Report",
 }
 
@@ -113,7 +115,9 @@ _AGENT_LABELS_KO = {
     "fact_checker":      "팩트체커",
     "stress_test":       "스트레스 테스트 분석가",
     "completeness":      "완성도 검사기",
-    "orchestrator":      "오케스트레이터",
+    "phase1_check":      "1단계 검토",
+    "phase2_check":      "2단계 검토",
+    "phase3_check":      "3단계 검토 & 종합",
     "final_report_agent":"최종 보고서 에이전트",
 }
 
@@ -146,9 +150,11 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         from agents.base import get_and_reset_usage
         from graph.workflow import (
             input_processor, phase1_parallel, phase1_aggregator,
+            phase1_check_node,
             phase2_parallel, phase2_aggregator,
+            phase2_check_node,
             fact_checker_node, stress_test_node,
-            completeness_node, orchestrator_node, final_report_node,
+            completeness_node, phase3_check_node, final_report_node,
         )
 
         state: dict = dict(initial_state)
@@ -175,7 +181,6 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             elif node_name not in _NO_LLM_NODES:
                 # Sequential agent — usage is on this thread
                 usage = get_and_reset_usage()
-                # node_name for phase3/4 agents matches the agent key
                 agent_key = node_name
                 token_usage[agent_key] = {
                     "input_tokens":  usage["input_tokens"],
@@ -191,12 +196,14 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(input_processor,   "input_processor")
         _step(phase1_parallel,   "phase1_parallel")
         _step(phase1_aggregator, "phase1_aggregator")
+        _step(phase1_check_node, "phase1_check")
         _step(phase2_parallel,   "phase2_parallel")
         _step(phase2_aggregator, "phase2_aggregator")
+        _step(phase2_check_node, "phase2_check")
         _step(fact_checker_node, "fact_checker")
         _step(stress_test_node,  "stress_test")
         _step(completeness_node,  "completeness")
-        _step(orchestrator_node,  "orchestrator")
+        _step(phase3_check_node,  "phase3_check")
         _step(final_report_node,  "final_report_agent")
 
         pdf_path = pdf_report.generate_pdf(state, job_id)
@@ -241,7 +248,7 @@ from config import validate_config
 _UI = {
     "en": {
         "app_title":            "## 📊 Due Diligence Agent",
-        "app_subtitle":         "Submit a company → 13 AI agents analyze it in 4 phases → full investment memo + PDF",
+        "app_subtitle":         "Submit a company → 15 AI agents analyze it in 4 phases → full investment memo + PDF",
         "history_btn":          "🕐 History",
         "form_heading":         "#### Submit a Company",
         "company_label":        "Company Name",
@@ -251,7 +258,7 @@ _UI = {
         "report_lang_label":    "Report Language",
         "docs_label":           "Supporting Documents *(optional)*",
         "docs_help":            "Pitch decks, 10-Ks, annual reports, etc.",
-        "cost_caption":         "Typical cost: **$1 – $5 per analysis** · 13 agents · claude-sonnet-4-6 · $3/M input · $15/M output",
+        "cost_caption":         "Typical cost: **$1 – $5 per analysis** · 15 agents · claude-sonnet-4-6 · $3/M input · $15/M output",
         "run_btn":              "🔍  Run Due Diligence",
         "pipeline_heading":     "#### Agent Pipeline Flow",
         "pipeline_caption":     "Orchestrator reviews each phase — scores agents, revises weak ones (red dashed), then passes to the next phase.",
@@ -302,7 +309,7 @@ _UI = {
     },
     "ko": {
         "app_title":            "## 📊 실사 에이전트",
-        "app_subtitle":         "기업을 입력하면 → AI 에이전트 13개가 4단계로 분석 → 투자 메모 + PDF 완성",
+        "app_subtitle":         "기업을 입력하면 → AI 에이전트 15개가 4단계로 분석 → 투자 메모 + PDF 완성",
         "history_btn":          "🕐 분석 기록",
         "form_heading":         "#### 기업 분석 요청",
         "company_label":        "기업명",
@@ -312,7 +319,7 @@ _UI = {
         "report_lang_label":    "보고서 언어",
         "docs_label":           "참고 문서 *(선택)*",
         "docs_help":            "사업계획서, 10-K, 연간보고서 등 PDF",
-        "cost_caption":         "예상 비용: **분석당 $1 – $5** · 에이전트 13개 · claude-sonnet-4-6 · 입력 $3/M · 출력 $15/M",
+        "cost_caption":         "예상 비용: **분석당 $1 – $5** · 에이전트 15개 · claude-sonnet-4-6 · 입력 $3/M · 출력 $15/M",
         "run_btn":              "🔍  실사 분석 시작",
         "pipeline_heading":     "#### 에이전트 파이프라인",
         "pipeline_caption":     "오케스트레이터가 각 단계를 검토 — 에이전트 점수 평가, 약한 에이전트 재실행(빨간 점선), 통과 후 다음 단계로 진행.",
