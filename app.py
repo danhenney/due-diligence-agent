@@ -3,11 +3,19 @@ import json
 import os
 import shutil
 import tempfile
+import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 REPORTS_DIR = Path("reports")
+
+# ── Background job store ───────────────────────────────────────────────────────
+# Module-level dict so it survives Streamlit reruns and page navigation.
+# Keys: job_id → {status, progress, result, pdf_bytes, error}
+_JOBS: dict = {}
+_JOBS_LOCK = threading.Lock()
 
 
 def _load_history() -> list[dict]:
@@ -26,6 +34,49 @@ def _save_history_entry(entry: dict) -> None:
     history.insert(0, entry)
     REPORTS_DIR.mkdir(exist_ok=True)
     hist_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
+    """Runs in a daemon thread. Writes progress + result into _JOBS[job_id]."""
+    try:
+        from graph.workflow import build_graph
+        import pdf_report
+
+        graph = build_graph(use_checkpointing=False)
+        merged: dict = {}
+        progress: list[str] = []
+
+        for step in graph.stream(initial_state, stream_mode="updates"):
+            for node_name, output in step.items():
+                merged.update(output)
+                progress.append(node_name)
+                with _JOBS_LOCK:
+                    _JOBS[job_id]["progress"] = progress.copy()
+
+        pdf_path = pdf_report.generate_pdf(merged, job_id)
+        with open(pdf_path, "rb") as fh:
+            pdf_bytes = fh.read()
+
+        _save_history_entry({
+            "id": job_id,
+            "company": company,
+            "recommendation": (merged.get("recommendation") or "WATCH").upper(),
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "pdf_path": str(pdf_path),
+        })
+
+        with _JOBS_LOCK:
+            _JOBS[job_id]["status"] = "complete"
+            _JOBS[job_id]["result"] = merged
+            _JOBS[job_id]["pdf_bytes"] = pdf_bytes
+
+    except Exception as exc:
+        with _JOBS_LOCK:
+            _JOBS[job_id]["status"] = "error"
+            _JOBS[job_id]["error"] = str(exc)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 import streamlit as st
 
@@ -102,10 +153,19 @@ for key, default in [
     ("result", None),
     ("pdf_bytes", None),
     ("company", ""),
+    ("job_id", None),
     ("history_pdf_cache", {}),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# If there's an active job, redirect to the running screen automatically
+_active_job = st.session_state.get("job_id")
+if _active_job and st.session_state.phase not in ("running", "results", "history"):
+    with _JOBS_LOCK:
+        _job_status = _JOBS.get(_active_job, {}).get("status")
+    if _job_status == "running":
+        st.session_state.phase = "running"
 
 # ── Node display labels (used in st.status) ───────────────────────────────────
 NODE_LABELS = {
@@ -483,7 +543,7 @@ if st.session_state.phase == "form":
                     render_agent_card(agent)
 
     # ── Analysis runner ───────────────────────────────────────────────────────
-    if run and company.strip():
+    if run and company.strip() and url.strip():
         tmp_dir = tempfile.mkdtemp()
         doc_paths: list[str] = []
         for f in (uploaded_files or []):
@@ -492,77 +552,108 @@ if st.session_state.phase == "form":
                 out.write(f.getbuffer())
             doc_paths.append(dest)
 
+        job_id = str(uuid.uuid4())
+        initial_state = {
+            "company_name": company.strip(),
+            "company_url": url.strip(),
+            "uploaded_docs": doc_paths,
+            "financial_report": None,
+            "market_report": None,
+            "legal_report": None,
+            "management_report": None,
+            "tech_report": None,
+            "bull_case": None,
+            "bear_case": None,
+            "valuation": None,
+            "red_flags": [],
+            "verification": None,
+            "stress_test": None,
+            "completeness": None,
+            "final_report": None,
+            "recommendation": None,
+            "messages": [],
+            "errors": [],
+            "current_phase": "init",
+        }
+
+        with _JOBS_LOCK:
+            _JOBS[job_id] = {"status": "running", "progress": [], "result": None,
+                             "pdf_bytes": None, "error": None}
+
+        t = threading.Thread(
+            target=_analysis_worker,
+            args=(job_id, initial_state, company.strip(), tmp_dir),
+            daemon=True,
+        )
+        t.start()
+
+        st.session_state.job_id = job_id
         st.session_state.company = company.strip()
-
-        from graph.workflow import build_graph
-        import pdf_report
-
-        try:
-            with st.status("Running due diligence analysis…", expanded=True) as status:
-                graph = build_graph(use_checkpointing=False)
-                initial_state = {
-                    "company_name": company.strip(),
-                    "company_url": url.strip() or None,
-                    "uploaded_docs": doc_paths,
-                    "financial_report": None,
-                    "market_report": None,
-                    "legal_report": None,
-                    "management_report": None,
-                    "tech_report": None,
-                    "bull_case": None,
-                    "bear_case": None,
-                    "valuation": None,
-                    "red_flags": [],
-                    "verification": None,
-                    "stress_test": None,
-                    "completeness": None,
-                    "final_report": None,
-                    "recommendation": None,
-                    "messages": [],
-                    "errors": [],
-                    "current_phase": "init",
-                }
-
-                merged: dict = {}
-                for step in graph.stream(initial_state, stream_mode="updates"):
-                    for node_name, output in step.items():
-                        merged.update(output)
-                        label = NODE_LABELS.get(
-                            node_name, node_name.replace("_", " ").title()
-                        )
-                        st.write(f"✓ {label}")
-
-                status.update(label="✅ Analysis complete!", state="complete")
-
-            job_id = str(uuid.uuid4())
-            pdf_path = pdf_report.generate_pdf(merged, job_id)
-            with open(pdf_path, "rb") as fh:
-                pdf_bytes = fh.read()
-
-            # Save to history
-            _save_history_entry({
-                "id": job_id,
-                "company": company.strip(),
-                "recommendation": (merged.get("recommendation") or "WATCH").upper(),
-                "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "pdf_path": str(pdf_path),
-            })
-            st.session_state.history_pdf_cache[job_id] = pdf_bytes
-
-            st.session_state.result = merged
-            st.session_state.pdf_bytes = pdf_bytes
-            st.session_state.phase = "results"
-            st.rerun()
-
-        except Exception as exc:
-            st.error(f"**Analysis failed:** {exc}")
-
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        st.session_state.phase = "running"
+        st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCREEN 2 — RESULTS
+# SCREEN 2 — RUNNING (background thread progress)
+# ─────────────────────────────────────────────────────────────────────────────
+elif st.session_state.phase == "running":
+    job_id = st.session_state.get("job_id", "")
+    company = st.session_state.get("company", "")
+
+    with _JOBS_LOCK:
+        job = dict(_JOBS.get(job_id, {"status": "unknown", "progress": [], "error": None}))
+
+    if job["status"] == "complete":
+        # Move results into session state and show results screen
+        st.session_state.result = job["result"]
+        st.session_state.pdf_bytes = job["pdf_bytes"]
+        st.session_state.history_pdf_cache[job_id] = job["pdf_bytes"]
+        st.session_state.phase = "results"
+        st.rerun()
+
+    elif job["status"] == "error":
+        st.error(f"**Analysis failed:** {job.get('error', 'Unknown error')}")
+        st.session_state.job_id = None
+        if st.button("← Try Again"):
+            st.session_state.phase = "form"
+            st.rerun()
+
+    else:
+        # Still running — show live progress and poll
+        st.markdown(f"## 📊 Analyzing {company}…")
+        st.caption("Running in the background — you can navigate away and come back at any time.")
+
+        col_hist, _ = st.columns([1, 5])
+        with col_hist:
+            if st.button("🕐 History", use_container_width=True):
+                st.session_state.phase = "history"
+                st.rerun()
+
+        st.divider()
+
+        progress = job.get("progress") or []
+        if progress:
+            for node in progress:
+                label = NODE_LABELS.get(node, node.replace("_", " ").title())
+                st.write(f"✓ {label}")
+            # Show a spinner for the next expected step
+            completed = set(progress)
+            for node in NODE_LABELS:
+                if node not in completed:
+                    with st.spinner(f"{NODE_LABELS[node]}…"):
+                        pass
+                    break
+        else:
+            with st.spinner("Starting up…"):
+                pass
+
+        # Poll every 3 seconds
+        time.sleep(3)
+        st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SCREEN 3 — RESULTS
 # ─────────────────────────────────────────────────────────────────────────────
 elif st.session_state.phase == "results":
     result: dict = st.session_state.result or {}
@@ -602,6 +693,7 @@ elif st.session_state.phase == "results":
             st.session_state.phase = "form"
             st.session_state.result = None
             st.session_state.pdf_bytes = None
+            st.session_state.job_id = None
             st.rerun()
     with col_hist:
         if st.button("🕐  History", use_container_width=True):
@@ -623,8 +715,17 @@ elif st.session_state.phase == "results":
 elif st.session_state.phase == "history":
     st.markdown("## 🕐 Analysis History")
     st.caption("All due diligence reports generated on this machine.")
-    if st.button("← Back to New Analysis"):
-        st.session_state.phase = "form"
+    _back_job = st.session_state.get("job_id")
+    _back_label = "← Back"
+    _back_phase = "form"
+    if _back_job:
+        with _JOBS_LOCK:
+            _back_status = _JOBS.get(_back_job, {}).get("status")
+        if _back_status == "running":
+            _back_label = "← Back to Running Analysis"
+            _back_phase = "running"
+    if st.button(_back_label):
+        st.session_state.phase = _back_phase
         st.rerun()
     st.divider()
 
