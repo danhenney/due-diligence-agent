@@ -48,8 +48,13 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Phase 1 Research Reports:\n{phase1_context}\n\n"
-        "Based on the research above, construct the strongest possible bear case. "
-        "Identify real risks that could cause this investment to fail. "
+        "Construct the strongest possible bear case.\n\n"
+        "LIVE DATA REQUIREMENT: Before writing the thesis, call yf_get_info(ticker) "
+        "to get today's stock price, current valuation multiples (P/E, EV/Revenue), "
+        "and check whether the stock is overvalued relative to growth. "
+        "Use news_search to find the most recent negative news, analyst downgrades, "
+        "and risk events. Your potential_loss and downside figures MUST reference "
+        "today's actual stock price from the tool call — not training memory.\n\n"
         "Return the specified JSON object."
     )
 

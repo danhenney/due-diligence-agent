@@ -50,9 +50,15 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {company}\n"
         f"URL: {url}{doc_note}\n\n"
-        "Conduct a thorough financial analysis of this company. "
-        "Use SEC filings if it's a public company, web search for additional data, "
-        "and any uploaded documents. "
+        "Conduct a thorough financial analysis of this company.\n\n"
+        "STEP 1 — LIVE DATA (mandatory for public companies): "
+        "Call yf_get_info(ticker) and yf_get_financials(ticker, 'quarterly') to retrieve "
+        "today's stock price, market cap, latest quarterly financials, margins, and analyst targets. "
+        "If you don't know the ticker, use web_search to find it first. "
+        "ALL financial figures in your output MUST come from these live tool calls, "
+        "not from training memory.\n\n"
+        "STEP 2 — DEPTH: Use get_sec_filings for multi-year historical trends, "
+        "web_search for private-company data, and any uploaded documents.\n\n"
         "Return your findings as the specified JSON object."
     )
 

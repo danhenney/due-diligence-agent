@@ -47,8 +47,13 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Phase 1 Research Reports:\n{phase1_context}\n\n"
-        "Based on the research above, construct the strongest possible bull case "
-        "investment thesis. Return the specified JSON object."
+        "Construct the strongest possible bull case investment thesis.\n\n"
+        "LIVE DATA REQUIREMENT: Before writing the thesis, call yf_get_info(ticker) "
+        "to get today's stock price, current market cap, and analyst targets. "
+        "Use news_search to find the most recent positive catalysts and company news. "
+        "Your upside_scenario and return_potential MUST reference today's actual stock "
+        "price / market cap from the tool call — not training memory.\n\n"
+        "Return the specified JSON object."
     )
 
     result = run_agent(

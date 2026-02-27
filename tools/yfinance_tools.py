@@ -223,11 +223,12 @@ def yf_get_analyst_data(ticker: str) -> dict[str, Any]:
 YF_GET_INFO_TOOL = {
     "name": "yf_get_info",
     "description": (
-        "Get a public company's current valuation metrics, profitability ratios, "
-        "balance sheet snapshot, and analyst consensus via Yahoo Finance. "
-        "Use this for any publicly traded company when you have a ticker symbol. "
-        "Returns market cap, EV, P/E, EV/Revenue, EV/EBITDA, gross/operating margins, "
-        "debt levels, free cash flow, analyst price targets, and more."
+        "LIVE real-time data: Get a public company's current stock price, market cap, "
+        "valuation multiples, profitability ratios, balance sheet snapshot, and analyst "
+        "consensus from Yahoo Finance. Data is fetched live — always more accurate than "
+        "training knowledge. Call this FIRST for any public company to get today's price, "
+        "market cap, P/E, EV/Revenue, EV/EBITDA, gross/operating margins, free cash flow, "
+        "52-week range, analyst price targets, and beta."
     ),
     "input_schema": {
         "type": "object",
@@ -244,11 +245,12 @@ YF_GET_INFO_TOOL = {
 YF_GET_FINANCIALS_TOOL = {
     "name": "yf_get_financials",
     "description": (
-        "Get structured financial statements (income statement, balance sheet, cash flow) "
-        "for a publicly traded company via Yahoo Finance. "
-        "Use 'annual' for multi-year trend analysis or 'quarterly' for recent momentum. "
-        "Returns revenue, gross profit, EBITDA, net income, EPS, total debt, cash, "
-        "free cash flow, and more — already parsed into clean numbers."
+        "LIVE real-time data: Get structured financial statements (income statement, "
+        "balance sheet, cash flow) for a publicly traded company via Yahoo Finance. "
+        "Use 'quarterly' for the most recent reported quarter, or 'annual' for "
+        "multi-year trend analysis. Returns live revenue, gross profit, EBITDA, "
+        "net income, EPS, total debt, cash, free cash flow — more current than "
+        "training knowledge."
     ),
     "input_schema": {
         "type": "object",
@@ -271,10 +273,11 @@ YF_GET_FINANCIALS_TOOL = {
 YF_GET_ANALYST_DATA_TOOL = {
     "name": "yf_get_analyst_data",
     "description": (
-        "Get analyst recommendations, consensus price targets, and earnings/revenue estimates "
-        "for a publicly traded company via Yahoo Finance. "
-        "Returns buy/sell/hold breakdown, mean price target with implied upside, "
-        "recent rating changes, and forward earnings and revenue estimates."
+        "LIVE real-time data: Get analyst recommendations, consensus price targets, "
+        "and earnings/revenue estimates for a publicly traded company via Yahoo Finance. "
+        "Returns current buy/sell/hold breakdown, mean price target with implied upside "
+        "vs. today's price, recent rating changes, and forward EPS/revenue estimates. "
+        "Use this to anchor bull/bear scenarios to current analyst consensus."
     ),
     "input_schema": {
         "type": "object",

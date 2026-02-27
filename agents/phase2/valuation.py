@@ -64,8 +64,15 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Phase 1 Research:\n{phase1_context}\n\n"
-        "Perform a rigorous valuation analysis using multiple methodologies. "
-        "Search for comparable public companies and recent M&A transactions. "
+        "Perform a rigorous valuation analysis using multiple methodologies.\n\n"
+        "LIVE DATA REQUIREMENT (mandatory):\n"
+        "1. Call yf_get_info(ticker) for the subject company (if public) to get "
+        "today's stock price, market cap, EV, and current multiples (P/E, EV/Revenue, EV/EBITDA).\n"
+        "2. Call yf_get_info(ticker) for each comparable public company to get their "
+        "LIVE trading multiples — never estimate comps from training memory.\n"
+        "3. Call yf_get_analyst_data(ticker) for analyst price targets and consensus.\n"
+        "4. Use web_search to find recent M&A transactions and precedent deal multiples.\n"
+        "ALL valuation figures must reference live data from these tool calls.\n\n"
         "Return the specified JSON object."
     )
 

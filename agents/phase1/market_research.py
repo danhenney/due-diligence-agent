@@ -52,9 +52,15 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {company}\n"
         f"URL: {url}\n\n"
-        "Conduct thorough market research for this company. "
-        "Identify the market size, key competitors, competitive positioning, "
-        "and macro environment. Return your findings as the specified JSON object."
+        "Conduct thorough market research for this company.\n\n"
+        "LIVE DATA REQUIREMENT: Use news_search and web_search to find the LATEST "
+        "market size estimates, competitor news, and industry developments — do not rely "
+        "on training memory for market figures. "
+        "Use yf_get_info(ticker) to get live market caps of any publicly traded competitors "
+        "you identify. "
+        "All TAM/SAM estimates, competitor market share, and macro data must reference "
+        "sources from tool calls, not training knowledge.\n\n"
+        "Return your findings as the specified JSON object."
     )
 
     result = run_agent(

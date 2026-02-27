@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from datetime import datetime
 from typing import Any
 
 import anthropic
@@ -62,6 +63,19 @@ def run_agent(
     Handles multi-turn tool calls automatically. Returns the final structured
     response parsed from the last assistant text block, or {"raw": text}.
     """
+    # Inject today's date so the agent knows its training data is stale
+    # and MUST use live tools for any current financial figures.
+    today = datetime.now().strftime("%B %d, %Y")
+    live_data_header = (
+        f"TODAY'S DATE: {today}. "
+        "Your training knowledge has a cutoff of August 2025. "
+        "Any numerical figure that can change over time — stock price, market cap, "
+        "revenue, earnings, analyst ratings, interest rates, competitor metrics — "
+        "MUST be fetched via a live tool call. "
+        "Never quote a financial number from training memory; always verify with a tool.\n\n"
+    )
+    system_prompt = live_data_header + system_prompt
+
     # Always append the tool-fallback instruction so Claude gracefully
     # degrades when a data tool hits a quota limit or returns an error.
     has_web_search = any(t.get("name") == "web_search" for t in tools)

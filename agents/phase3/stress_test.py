@@ -74,7 +74,11 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Prior Analysis:\n{context}\n\n"
-        "Conduct a rigorous stress test. Model three downside scenarios with quantified impact. "
+        "Conduct a rigorous stress test. Model three downside scenarios with quantified impact.\n\n"
+        "LIVE DATA REQUIREMENT: Use web_search and news_search to check for any recent "
+        "negative developments, competitive threats, or macro changes that affect your scenarios. "
+        "Valuation impact figures (e.g. '−40% to stock price') must be anchored to the "
+        "current stock price or market cap confirmed in prior analysis — not training memory.\n\n"
         "Return the specified JSON object."
     )
 

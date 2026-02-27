@@ -60,8 +60,13 @@ def run(state: DueDiligenceState) -> dict:
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"All Prior Research:\n{all_context}\n\n"
-        "Fact-check the most material claims from the research above. "
-        "Use web search to independently verify or contradict key facts. "
+        "Fact-check the most material claims from the research above.\n\n"
+        "LIVE VERIFICATION REQUIREMENT: For any financial figure claimed above "
+        "(market cap, revenue, stock price, valuation multiple), call yf_get_info(ticker) "
+        "or yf_get_financials(ticker) to confirm the number is current and correct. "
+        "Use news_search to verify any recent events, product launches, or regulatory actions. "
+        "Your fact-check MUST compare claimed figures against live tool results — "
+        "flag any that differ from training memory.\n\n"
         "Return the specified JSON object."
     )
 

@@ -44,6 +44,7 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "market_research": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
+            yfinance_tools.YF_GET_INFO_TOOL,          # live market caps of competitors
             pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
             pytrends_tools.GOOGLE_TRENDS_RELATED_TOOL,
             fred_tools.FRED_GET_SERIES_TOOL,
@@ -68,9 +69,19 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
             patents_tools.SEARCH_PATENTS_TOOL,
         ],
-        # Phase 2
-        "bull_case": [],        # reads state only — no live tools
-        "bear_case": [],
+        # Phase 2 — bull/bear also need live tools to verify current prices & news
+        "bull_case": [
+            yfinance_tools.YF_GET_INFO_TOOL,
+            yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
+            tavily_tools.WEB_SEARCH_TOOL,
+            tavily_tools.NEWS_SEARCH_TOOL,
+        ],
+        "bear_case": [
+            yfinance_tools.YF_GET_INFO_TOOL,
+            yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
+            tavily_tools.WEB_SEARCH_TOOL,
+            tavily_tools.NEWS_SEARCH_TOOL,
+        ],
         "valuation": [
             yfinance_tools.YF_GET_INFO_TOOL,
             yfinance_tools.YF_GET_FINANCIALS_TOOL,
@@ -83,8 +94,13 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "fact_checker": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
+            yfinance_tools.YF_GET_INFO_TOOL,          # verify live financial figures
+            yfinance_tools.YF_GET_FINANCIALS_TOOL,
         ],
-        "stress_test": [],
+        "stress_test": [
+            tavily_tools.WEB_SEARCH_TOOL,
+            tavily_tools.NEWS_SEARCH_TOOL,
+        ],
         "completeness": [],
         # Phase 4
         "final_report": [],
