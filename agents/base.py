@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import anthropic
@@ -17,6 +18,17 @@ def _get_client() -> anthropic.Anthropic:
     if _client is None:
         _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     return _client
+
+
+def _create_with_retry(client: anthropic.Anthropic, max_retries: int = 5, **kwargs) -> Any:
+    """Call messages.create with exponential backoff on rate limit errors."""
+    for attempt in range(max_retries):
+        try:
+            return client.messages.create(**kwargs)
+        except anthropic.RateLimitError:
+            wait = min(60, 10 * (2 ** attempt))  # 10 20 40 60 60 …
+            time.sleep(wait)
+    return client.messages.create(**kwargs)  # final attempt, let it raise
 
 
 def run_agent(
@@ -44,7 +56,7 @@ def run_agent(
         if tools:
             kwargs["tools"] = tools
 
-        response = client.messages.create(**kwargs)
+        response = _create_with_retry(client, **kwargs)
 
         tool_use_blocks = []
         text_blocks = []
