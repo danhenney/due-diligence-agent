@@ -12,6 +12,12 @@ from pathlib import Path
 REPORTS_DIR = Path("reports")
 _JOBS_DIR = REPORTS_DIR / "jobs"
 
+# Max concurrent analyses. Additional submissions wait in queue.
+_ANALYSIS_SEMAPHORE = threading.Semaphore(2)
+
+# Jobs stuck in "running" longer than this are marked as timed-out.
+_STALE_JOB_TIMEOUT_SEC = 5400  # 90 minutes
+
 
 # ── File-based job state (survives multi-process + navigation) ─────────────────
 
@@ -24,7 +30,17 @@ def _read_job(job_id: str) -> dict:
     f = _job_file(job_id)
     try:
         if f.exists():
-            return json.loads(f.read_text(encoding="utf-8"))
+            data = json.loads(f.read_text(encoding="utf-8"))
+            # Auto-expire stale "running" jobs (e.g. after a server restart mid-run)
+            if data.get("status") in ("running", "queued"):
+                start = data.get("start_time") or 0
+                if start and time.time() - start > _STALE_JOB_TIMEOUT_SEC:
+                    data["status"] = "error"
+                    data["error"] = (
+                        "Analysis timed out or the server was restarted mid-run. "
+                        "Please submit again."
+                    )
+            return data
     except Exception:
         pass
     return {"status": "unknown", "progress": [], "error": None, "start_time": None}
@@ -63,7 +79,19 @@ def _save_history_entry(entry: dict) -> None:
 # ── Background worker ──────────────────────────────────────────────────────────
 
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
-    """Daemon thread — calls pipeline nodes directly, writes progress to disk."""
+    """Daemon thread — waits for a semaphore slot, then runs the full pipeline."""
+    # Wait for a free slot (max 2 concurrent analyses)
+    _update_job(job_id, {"status": "queued"})
+    _ANALYSIS_SEMAPHORE.acquire()
+    try:
+        _update_job(job_id, {"status": "running", "start_time": time.time()})
+        _run_pipeline(job_id, initial_state, company, tmp_dir)
+    finally:
+        _ANALYSIS_SEMAPHORE.release()
+
+
+def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
+    """Inner worker — runs all pipeline nodes and writes results to disk."""
     try:
         import pdf_report
         from graph.workflow import (
@@ -216,10 +244,10 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# If there's an active job still running, redirect to the running screen automatically
+# If there's an active job still running or queued, redirect to the running screen automatically
 _active_job = st.session_state.get("job_id")
 if _active_job and st.session_state.phase not in ("running", "results", "history"):
-    if _read_job(_active_job).get("status") == "running":
+    if _read_job(_active_job).get("status") in ("running", "queued"):
         st.session_state.phase = "running"
 
 # ── Node display labels (used in st.status) ───────────────────────────────────
@@ -703,6 +731,20 @@ elif st.session_state.phase == "running":
             st.session_state.phase = "form"
             st.rerun()
 
+    elif job["status"] == "queued":
+        # Waiting for a semaphore slot — show queue message
+        st.markdown(f"## 📊 {company} — Queued")
+        st.caption("Two analyses are already running. Yours will start automatically when a slot opens.")
+        st.info(
+            "**Your analysis is in the queue.**\n\n"
+            "The server allows 2 simultaneous analyses to avoid API rate limits. "
+            "You're next in line — this page will update automatically when it starts."
+        )
+        elapsed_sec = time.time() - (job.get("start_time") or time.time())
+        st.caption(f"Waiting… {int(elapsed_sec)}s in queue")
+        time.sleep(5)
+        st.rerun()
+
     else:
         # Still running — show live progress and poll
         st.markdown(f"## 📊 Analyzing {company}…")
@@ -830,7 +872,7 @@ elif st.session_state.phase == "history":
     _back_job = st.session_state.get("job_id")
     _back_label = "← Back"
     _back_phase = "form"
-    if _back_job and _read_job(_back_job).get("status") == "running":
+    if _back_job and _read_job(_back_job).get("status") in ("running", "queued"):
         _back_label = "← Back to Running Analysis"
         _back_phase = "running"
     if st.button(_back_label):
