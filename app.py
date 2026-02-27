@@ -64,9 +64,12 @@ _missing = validate_config()
 if _missing:
     st.error(
         f"**Missing API keys:** {', '.join(_missing)}\n\n"
-        "Create a `.env` file in the project folder:\n"
-        "```\nGOOGLE_API_KEY=...\nTAVILY_API_KEY=...\n```\n"
-        "Free Google key → https://aistudio.google.com/app/apikey"
+        "On **Streamlit Cloud**: go to your app → ⚙️ Settings → Secrets, and paste:\n"
+        "```toml\n"
+        'ANTHROPIC_API_KEY = "sk-ant-..."\n'
+        'TAVILY_API_KEY = "tvly-..."\n'
+        "```\n"
+        "Running locally? Add those same lines to a `.env` file in the project folder."
     )
     st.stop()
 
