@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Due Diligence Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .drop-active { border-color: #6366f1 !important; background-color: #eef2ff !important; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+    .chip-running { background: #fef3c7; color: #92400e; }
+    .chip-done   { background: #dcfce7; color: #14532d; }
+    .chip-pending{ background: #f1f5f9; color: #64748b; }
+    .chip-error  { background: #fee2e2; color: #7f1d1d; }
+    .phase-card { border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1.25rem; background: white; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+
+<!-- ═══════════════════════════════ SCREEN 1: FORM ═══════════════════════════ -->
+<div id="screen-form" class="max-w-2xl mx-auto px-4 py-12 fade-in">
+
+  <!-- Header -->
+  <div class="text-center mb-10">
+    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 mb-4">
+      <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+    </div>
+    <h1 class="text-3xl font-bold text-slate-900">Due Diligence Agent</h1>
+    <p class="text-slate-500 mt-2">AI-powered investment analysis in minutes</p>
+  </div>
+
+  <!-- Form card -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+    <form id="analyze-form" class="space-y-6">
+
+      <!-- Company name -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">
+          Company Name <span class="text-red-500">*</span>
+        </label>
+        <input
+          id="company-input"
+          type="text"
+          required
+          placeholder="e.g. Apple, OpenAI, Stripe"
+          class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+        />
+      </div>
+
+      <!-- Website URL -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">
+          Website URL <span class="text-slate-400 font-normal">(optional)</span>
+        </label>
+        <input
+          id="url-input"
+          type="url"
+          placeholder="https://example.com"
+          class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+        />
+      </div>
+
+      <!-- PDF upload -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">
+          Supporting Documents <span class="text-slate-400 font-normal">(optional — pitch decks, 10-Ks, etc.)</span>
+        </label>
+        <div
+          id="drop-zone"
+          class="relative border-2 border-dashed border-slate-300 rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-indigo-400 hover:bg-indigo-50"
+          ondragover="event.preventDefault(); this.classList.add('drop-active')"
+          ondragleave="this.classList.remove('drop-active')"
+          ondrop="handleDrop(event)"
+          onclick="document.getElementById('file-input').click()"
+        >
+          <svg class="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+          <p class="text-sm text-slate-500">Drag & drop PDFs here, or <span class="text-indigo-600 font-medium">browse</span></p>
+          <input id="file-input" type="file" multiple accept=".pdf" class="hidden" onchange="handleFiles(this.files)" />
+        </div>
+        <div id="file-list" class="mt-2 space-y-1"></div>
+      </div>
+
+      <!-- Info box -->
+      <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+        <p class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">What our 13 agents analyze</p>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span>• Financial health &amp; ratios</span>
+          <span>• Market size &amp; competition</span>
+          <span>• Legal &amp; regulatory risk</span>
+          <span>• Management team</span>
+          <span>• Technology &amp; product moat</span>
+          <span>• Bull &amp; bear case thesis</span>
+          <span>• Valuation &amp; DCF</span>
+          <span>• Red flag detection</span>
+          <span>• Fact-checking</span>
+          <span>• Stress testing</span>
+          <span>• Completeness review</span>
+          <span>• Investment memo</span>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        id="submit-btn"
+        class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-sm shadow-sm"
+      >
+        Run Due Diligence Analysis
+      </button>
+
+      <div id="form-error" class="hidden text-sm text-red-600 text-center"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ SCREEN 2: LIVE PROGRESS ══════════════════════ -->
+<div id="screen-progress" class="hidden max-w-3xl mx-auto px-4 py-12 fade-in">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h2 class="text-2xl font-bold text-slate-900" id="progress-company">Analyzing…</h2>
+      <p class="text-slate-500 text-sm mt-0.5">AI agents are running in parallel</p>
+    </div>
+    <div class="text-right">
+      <span class="text-2xl font-mono font-semibold text-indigo-600" id="elapsed-timer">0:00</span>
+      <p class="text-xs text-slate-400 mt-0.5">elapsed</p>
+    </div>
+  </div>
+
+  <!-- Error banner (hidden by default) -->
+  <div id="error-banner" class="hidden mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+    <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <div class="flex-1">
+      <p class="text-sm font-medium text-red-800">Analysis failed</p>
+      <p class="text-sm text-red-600 mt-0.5" id="error-message"></p>
+    </div>
+    <button onclick="resetToForm()" class="text-sm font-medium text-red-700 hover:text-red-900 underline">Try Again</button>
+  </div>
+
+  <!-- Phase cards grid -->
+  <div class="grid grid-cols-1 gap-4">
+
+    <!-- Phase 1 -->
+    <div class="phase-card" id="phase-card-1">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-widest text-indigo-600">Phase 1</span>
+        <span class="text-xs text-slate-400">— Parallel Research</span>
+      </div>
+      <div class="flex flex-wrap gap-2" id="phase1-chips">
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="financial_analyst">Financial Analyst</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="market_research">Market Research</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="legal_risk">Legal Risk</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="management_team">Management</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="tech_product">Tech &amp; Product</span>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="phase-card" id="phase-card-2">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-widest text-violet-600">Phase 2</span>
+        <span class="text-xs text-slate-400">— Investment Analysis</span>
+      </div>
+      <div class="flex flex-wrap gap-2" id="phase2-chips">
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="bull_case">Bull Case</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="bear_case">Bear Case</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="valuation">Valuation</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="red_flag">Red Flags</span>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="phase-card" id="phase-card-3">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-widest text-amber-600">Phase 3</span>
+        <span class="text-xs text-slate-400">— Verification</span>
+      </div>
+      <div class="flex flex-wrap gap-2" id="phase3-chips">
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="fact_checker">Fact Checker</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="stress_test">Stress Test</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="completeness">Completeness</span>
+      </div>
+    </div>
+
+    <!-- Phase 4 -->
+    <div class="phase-card" id="phase-card-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-bold uppercase tracking-widest text-emerald-600">Phase 4</span>
+        <span class="text-xs text-slate-400">— Investment Memo</span>
+      </div>
+      <div class="flex flex-wrap gap-2" id="phase4-chips">
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="final_report_agent">Final Report</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════ SCREEN 3: RESULTS ════════════════════════════ -->
+<div id="screen-results" class="hidden max-w-xl mx-auto px-4 py-16 fade-in text-center">
+
+  <!-- Badge -->
+  <div id="result-badge" class="inline-block px-10 py-5 rounded-2xl mb-6 shadow-md">
+    <div class="text-4xl font-black tracking-wider" id="result-rec">WATCH</div>
+  </div>
+
+  <h2 class="text-2xl font-bold text-slate-900 mb-2" id="result-company"></h2>
+  <p class="text-slate-500 mb-10" id="result-desc"></p>
+
+  <div class="flex flex-col sm:flex-row gap-3 justify-center">
+    <a
+      id="download-btn"
+      href="#"
+      class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-sm shadow-sm"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+      </svg>
+      Download PDF Report
+    </a>
+    <button
+      onclick="resetToForm()"
+      class="px-6 py-3 border border-slate-300 hover:border-slate-400 text-slate-700 font-semibold rounded-lg transition-colors text-sm"
+    >
+      Analyze Another Company
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ JAVASCRIPT ═════════════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentJobId = null;
+let timerInterval = null;
+let timerStart = null;
+let eventSource = null;
+let pollInterval = null;
+let selectedFiles = [];
+
+// ── File handling ─────────────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drop-active');
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  for (const f of files) {
+    if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
+      if (!selectedFiles.find(x => x.name === f.name && x.size === f.size)) {
+        selectedFiles.push(f);
+      }
+    }
+  }
+  renderFileList();
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = selectedFiles.map((f, i) => `
+    <div class="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 rounded px-3 py-1.5">
+      <svg class="w-3.5 h-3.5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+      </svg>
+      <span class="flex-1 truncate">${f.name}</span>
+      <span class="text-slate-400">${(f.size/1024).toFixed(0)} KB</span>
+      <button onclick="removeFile(${i})" class="text-slate-400 hover:text-red-500 ml-1">✕</button>
+    </div>
+  `).join('');
+}
+
+// ── Form submission ───────────────────────────────────────────────────────────
+document.getElementById('analyze-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const company = document.getElementById('company-input').value.trim();
+  const url = document.getElementById('url-input').value.trim();
+  const errEl = document.getElementById('form-error');
+
+  if (!company) {
+    errEl.textContent = 'Company name is required.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
+
+  const formData = new FormData();
+  formData.append('company', company);
+  formData.append('url', url);
+  for (const f of selectedFiles) formData.append('files', f);
+
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-btn').textContent = 'Submitting…';
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error(await res.text());
+    const { job_id } = await res.json();
+    currentJobId = job_id;
+    showProgress(company);
+    startSSE(job_id);
+  } catch (err) {
+    errEl.textContent = 'Failed to start analysis: ' + err.message;
+    errEl.classList.remove('hidden');
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('submit-btn').textContent = 'Run Due Diligence Analysis';
+  }
+});
+
+// ── Screen transitions ────────────────────────────────────────────────────────
+function showProgress(company) {
+  document.getElementById('screen-form').classList.add('hidden');
+  const screen = document.getElementById('screen-progress');
+  screen.classList.remove('hidden');
+  screen.classList.add('fade-in');
+  document.getElementById('progress-company').textContent = company;
+  startTimer();
+}
+
+function showResults(recommendation) {
+  stopTimer();
+  document.getElementById('screen-progress').classList.add('hidden');
+  const screen = document.getElementById('screen-results');
+  screen.classList.remove('hidden');
+  screen.classList.add('fade-in');
+
+  const rec = (recommendation || 'WATCH').toUpperCase();
+  const colors = {
+    INVEST: { bg: 'bg-green-100', text: 'text-green-700', desc: 'Strong investment opportunity with compelling fundamentals.' },
+    WATCH:  { bg: 'bg-amber-100', text: 'text-amber-700', desc: 'Interesting opportunity — monitor for further developments.' },
+    PASS:   { bg: 'bg-red-100',   text: 'text-red-700',   desc: 'Risks outweigh opportunities at this time.' },
+  };
+  const c = colors[rec] || colors.WATCH;
+
+  const badge = document.getElementById('result-badge');
+  badge.className = `inline-block px-10 py-5 rounded-2xl mb-6 shadow-md ${c.bg}`;
+  const recEl = document.getElementById('result-rec');
+  recEl.className = `text-4xl font-black tracking-wider ${c.text}`;
+  recEl.textContent = rec;
+
+  document.getElementById('result-company').textContent =
+    document.getElementById('progress-company').textContent;
+  document.getElementById('result-desc').textContent = c.desc;
+  document.getElementById('download-btn').href = `/api/report/${currentJobId}`;
+}
+
+function resetToForm() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  stopTimer();
+  resetChips();
+  selectedFiles = [];
+  renderFileList();
+  document.getElementById('company-input').value = '';
+  document.getElementById('url-input').value = '';
+  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('submit-btn').textContent = 'Run Due Diligence Analysis';
+  document.getElementById('error-banner').classList.add('hidden');
+  document.getElementById('screen-progress').classList.add('hidden');
+  document.getElementById('screen-results').classList.add('hidden');
+  document.getElementById('screen-form').classList.remove('hidden');
+  currentJobId = null;
+}
+
+// ── Timer ──────────────────────────────────────────────────────────────────────
+function startTimer() {
+  timerStart = Date.now();
+  timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - timerStart) / 1000);
+    const m = Math.floor(s / 60);
+    document.getElementById('elapsed-timer').textContent =
+      `${m}:${String(s % 60).padStart(2, '0')}`;
+  }, 1000);
+}
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+// ── Chip state machine ────────────────────────────────────────────────────────
+const NODE_MAP = {
+  input_processor:   { action: 'phase1-start' },
+  phase1_parallel:   { action: 'phase1-done' },
+  phase1_aggregator: { action: 'phase2-start' },
+  phase2_parallel:   { action: 'phase2-done' },
+  phase2_aggregator: { action: 'phase3-fc-running' },
+  fact_checker:      { action: 'phase3-st-running' },
+  stress_test:       { action: 'phase3-co-running' },
+  completeness:      { action: 'phase4-start' },
+  final_report_agent:{ action: 'phase4-done' },
+};
+
+function setChip(groupId, agentKey, state) {
+  const chip = document.querySelector(`#${groupId} [data-agent="${agentKey}"]`);
+  if (!chip) return;
+  chip.className = 'chip px-3 py-1 rounded-full text-xs font-medium ' + {
+    pending: 'chip-pending',
+    running: 'chip-running',
+    done:    'chip-done',
+    error:   'chip-error',
+  }[state];
+  chip.textContent = {
+    pending: chip.dataset.label || chip.textContent,
+    running: '⏳ ' + (chip.dataset.label || chip.textContent.replace(/^[⏳✓] /, '')),
+    done:    '✓ ' + (chip.dataset.label || chip.textContent.replace(/^[⏳✓] /, '')),
+    error:   '✗ ' + (chip.dataset.label || chip.textContent.replace(/^[⏳✓] /, '')),
+  }[state];
+}
+
+function setGroupChips(groupId, agents, state) {
+  for (const a of agents) setChip(groupId, a, state);
+}
+
+const P1_AGENTS = ['financial_analyst','market_research','legal_risk','management_team','tech_product'];
+const P2_AGENTS = ['bull_case','bear_case','valuation','red_flag'];
+
+function handleNodeEvent(node) {
+  const action = (NODE_MAP[node] || {}).action;
+  switch (action) {
+    case 'phase1-start':
+      setGroupChips('phase1-chips', P1_AGENTS, 'running');
+      break;
+    case 'phase1-done':
+      setGroupChips('phase1-chips', P1_AGENTS, 'done');
+      break;
+    case 'phase2-start':
+      setGroupChips('phase2-chips', P2_AGENTS, 'running');
+      break;
+    case 'phase2-done':
+      setGroupChips('phase2-chips', P2_AGENTS, 'done');
+      break;
+    case 'phase3-fc-running':
+      setChip('phase3-chips', 'fact_checker', 'running');
+      break;
+    case 'phase3-st-running':
+      setChip('phase3-chips', 'fact_checker', 'done');
+      setChip('phase3-chips', 'stress_test', 'running');
+      break;
+    case 'phase3-co-running':
+      setChip('phase3-chips', 'stress_test', 'done');
+      setChip('phase3-chips', 'completeness', 'running');
+      break;
+    case 'phase4-start':
+      setChip('phase3-chips', 'completeness', 'done');
+      setChip('phase4-chips', 'final_report_agent', 'running');
+      break;
+    case 'phase4-done':
+      setChip('phase4-chips', 'final_report_agent', 'done');
+      break;
+  }
+}
+
+function resetChips() {
+  document.querySelectorAll('.chip').forEach(c => {
+    c.className = 'chip chip-pending px-3 py-1 rounded-full text-xs font-medium';
+    c.textContent = c.textContent.replace(/^[⏳✓✗] /, '');
+  });
+}
+
+// ── SSE connection ────────────────────────────────────────────────────────────
+function startSSE(jobId) {
+  eventSource = new EventSource(`/api/stream/${jobId}`);
+
+  eventSource.onmessage = (e) => {
+    if (!e.data || e.data === 'null') {
+      eventSource.close();
+      return;
+    }
+    let event;
+    try { event = JSON.parse(e.data); } catch { return; }
+
+    if (event.type === 'node_complete') {
+      handleNodeEvent(event.node);
+    } else if (event.type === 'complete') {
+      eventSource.close();
+      showResults(event.recommendation);
+    } else if (event.type === 'error') {
+      eventSource.close();
+      showError(event.message);
+    }
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    eventSource = null;
+    // Fall back to polling
+    startPolling(jobId);
+  };
+}
+
+function startPolling(jobId) {
+  if (pollInterval) return;
+  pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/status/${jobId}`);
+      const data = await res.json();
+      if (data.status === 'complete') {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        showResults(data.recommendation);
+      } else if (data.status === 'error') {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        showError(data.error || 'Unknown error');
+      }
+    } catch { /* ignore transient fetch errors */ }
+  }, 3000);
+}
+
+function showError(msg) {
+  document.getElementById('error-message').textContent = msg;
+  document.getElementById('error-banner').classList.remove('hidden');
+  stopTimer();
+}
+</script>
+</body>
+</html>
