@@ -38,6 +38,13 @@ def _save_history_entry(entry: dict) -> None:
 
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
     """Runs in a daemon thread. Writes progress + result into _JOBS[job_id]."""
+    import asyncio
+
+    # LangGraph's sync stream() uses asyncio internally.
+    # Background threads have no event loop by default — create one explicitly.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     try:
         from graph.workflow import build_graph
         import pdf_report
@@ -76,6 +83,7 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
             _JOBS[job_id]["error"] = str(exc)
 
     finally:
+        loop.close()
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 import streamlit as st
