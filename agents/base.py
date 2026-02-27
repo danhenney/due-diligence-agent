@@ -1,61 +1,56 @@
-"""Base agent using Google Gemini with tool use."""
+"""Base agent using Groq (Llama 3.3 70B) with tool use and rate-limit retry."""
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
-import google.generativeai as genai
-import google.generativeai.protos as protos
+from groq import Groq
 
-from config import GOOGLE_API_KEY, MODEL_NAME, MAX_TOKENS
+from config import GROQ_API_KEY, MODEL_NAME, MAX_TOKENS
 from tools.executor import execute_tool_call
 
-# ── Schema conversion (Anthropic format → Gemini protos) ──────────────────────
-
-_TYPE_MAP = {
-    "string":  protos.Type.STRING,
-    "integer": protos.Type.INTEGER,
-    "number":  protos.Type.NUMBER,
-    "boolean": protos.Type.BOOLEAN,
-    "array":   protos.Type.ARRAY,
-    "object":  protos.Type.OBJECT,
-}
+_client: Groq | None = None
 
 
-def _to_schema(d: dict) -> protos.Schema:
-    t = _TYPE_MAP.get(d.get("type", "string"), protos.Type.STRING)
-    kw: dict[str, Any] = {"type": t}
-    if d.get("description"):
-        kw["description"] = d["description"]
-    if t == protos.Type.OBJECT:
-        props = {k: _to_schema(v) for k, v in d.get("properties", {}).items()}
-        if props:
-            kw["properties"] = props
-        if d.get("required"):
-            kw["required"] = d["required"]
-    elif t == protos.Type.ARRAY and "items" in d:
-        kw["items"] = _to_schema(d["items"])
-    return protos.Schema(**kw)
+def _get_client() -> Groq:
+    global _client
+    if _client is None:
+        _client = Groq(api_key=GROQ_API_KEY)
+    return _client
 
 
-def _to_gemini_tools(anthropic_tools: list[dict]) -> list | None:
-    """Convert Anthropic tool definitions to a Gemini Tool proto."""
+def _to_groq_tools(anthropic_tools: list[dict]) -> list[dict] | None:
+    """Convert Anthropic tool format → Groq/OpenAI function-calling format."""
     if not anthropic_tools:
         return None
-    fds = [
-        protos.FunctionDeclaration(
-            name=t["name"],
-            description=t["description"],
-            parameters=_to_schema(
-                t.get("input_schema", {"type": "object", "properties": {}})
-            ),
-        )
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        }
         for t in anthropic_tools
     ]
-    return [protos.Tool(function_declarations=fds)]
 
 
-# ── Agent loop ─────────────────────────────────────────────────────────────────
+def _call_with_retry(client: Groq, max_retries: int = 6, **kwargs) -> Any:
+    """Call chat.completions.create with exponential backoff on 429s."""
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            msg = str(exc)
+            if "429" in msg or "rate" in msg.lower() or "quota" in msg.lower():
+                wait = min(60, 5 * (2 ** attempt))  # 5 10 20 40 60 60 …
+                time.sleep(wait)
+            else:
+                raise
+    return client.chat.completions.create(**kwargs)
+
 
 def run_agent(
     agent_type: str,
@@ -64,65 +59,68 @@ def run_agent(
     tools: list[dict],
     max_iterations: int = 10,
 ) -> dict[str, Any]:
-    """Run a Gemini agentic loop with tool use.
+    """Run a Groq agentic loop with tool use.
 
-    Mirrors the original Anthropic-based interface so all agent files
-    remain unchanged.
+    Drop-in replacement for the original Anthropic-based interface —
+    all agent files remain unchanged.
     """
-    genai.configure(api_key=GOOGLE_API_KEY)
+    client = _get_client()
+    groq_tools = _to_groq_tools(tools)
 
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=system_prompt,
-        tools=_to_gemini_tools(tools),
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=MAX_TOKENS,
-        ),
-    )
+    messages: list[dict] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": user_message},
+    ]
 
-    chat = model.start_chat()
-    response = chat.send_message(user_message)
+    final_text = ""
 
     for _ in range(max_iterations):
-        # Collect any function-call parts
-        fn_calls = []
-        for part in response.parts:
-            try:
-                if part.function_call.name:
-                    fn_calls.append(part.function_call)
-            except AttributeError:
-                pass
+        kwargs: dict[str, Any] = {
+            "model":      MODEL_NAME,
+            "max_tokens": MAX_TOKENS,
+            "messages":   messages,
+        }
+        if groq_tools:
+            kwargs["tools"]       = groq_tools
+            kwargs["tool_choice"] = "auto"
 
-        if not fn_calls:
+        response   = _call_with_retry(client, **kwargs)
+        msg        = response.choices[0].message
+        tool_calls = msg.tool_calls or []
+        final_text = msg.content or ""
+
+        # Append assistant turn (Groq needs explicit dict, not the SDK object)
+        messages.append({
+            "role":    "assistant",
+            "content": final_text,
+            "tool_calls": [
+                {
+                    "id":   tc.id,
+                    "type": "function",
+                    "function": {
+                        "name":      tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in tool_calls
+            ] if tool_calls else [],
+        })
+
+        if not tool_calls:
             break
 
-        # Execute every tool call and collect responses
-        fn_parts = []
-        for fc in fn_calls:
+        # Execute every tool call and append results
+        for tc in tool_calls:
             try:
-                result = execute_tool_call(fc.name, dict(fc.args))
+                tool_input = json.loads(tc.function.arguments)
+                result = execute_tool_call(tc.function.name, tool_input)
             except Exception as exc:
                 result = json.dumps({"error": str(exc)})
-            fn_parts.append(
-                protos.Part(
-                    function_response=protos.FunctionResponse(
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                )
-            )
-
-        response = chat.send_message(protos.Content(parts=fn_parts))
-
-    # Extract final text
-    text_parts = []
-    for part in response.parts:
-        try:
-            if part.text:
-                text_parts.append(part.text)
-        except AttributeError:
-            pass
-    final_text = "".join(text_parts).strip()
+            messages.append({
+                "role":         "tool",
+                "tool_call_id": tc.id,
+                "content":      result,
+            })
 
     return _parse_json_response(final_text)
 
@@ -131,12 +129,12 @@ def _parse_json_response(text: str) -> dict[str, Any]:
     """Extract the first JSON object from text, or return {"raw": text}."""
     cleaned = text
     if "```json" in text:
-        start = text.index("```json") + 7
-        end = text.index("```", start)
+        start   = text.index("```json") + 7
+        end     = text.index("```", start)
         cleaned = text[start:end].strip()
     elif "```" in text:
-        start = text.index("```") + 3
-        end = text.index("```", start)
+        start   = text.index("```") + 3
+        end     = text.index("```", start)
         cleaned = text[start:end].strip()
 
     try:
