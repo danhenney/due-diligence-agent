@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from tools import tavily_tools, edgar_tools, pdf_tools, yfinance_tools
+from tools import pytrends_tools, fred_tools, github_tools, patents_tools
 
 # Map tool name → executor module
 _TOOL_REGISTRY: dict[str, object] = {}
 
-for _mod in (tavily_tools, edgar_tools, pdf_tools, yfinance_tools):
-    # Each module exposes an execute_tool(name, inputs) function
+for _mod in (tavily_tools, edgar_tools, pdf_tools, yfinance_tools,
+             pytrends_tools, fred_tools, github_tools, patents_tools):
     _TOOL_REGISTRY[_mod.__name__.split(".")[-1]] = _mod
 
 
@@ -43,11 +44,17 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "market_research": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
+            pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
+            pytrends_tools.GOOGLE_TRENDS_RELATED_TOOL,
+            fred_tools.FRED_GET_SERIES_TOOL,
+            fred_tools.FRED_SEARCH_SERIES_TOOL,
         ],
         "legal_risk": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            patents_tools.SEARCH_PATENTS_TOOL,
+            patents_tools.GET_PATENT_DETAIL_TOOL,
         ],
         "management_team": [
             tavily_tools.WEB_SEARCH_TOOL,
@@ -56,6 +63,10 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "tech_product": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
+            github_tools.GITHUB_SEARCH_REPOS_TOOL,
+            github_tools.GITHUB_REPO_STATS_TOOL,
+            pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
+            patents_tools.SEARCH_PATENTS_TOOL,
         ],
         # Phase 2
         "bull_case": [],        # reads state only — no live tools
@@ -100,6 +111,18 @@ def execute_tool_call(tool_name: str, tool_input: dict) -> str:
         # yfinance tools
         if tool_name in ("yf_get_info", "yf_get_financials", "yf_get_analyst_data"):
             return yfinance_tools.execute_tool(tool_name, tool_input)
+        # Google Trends tools
+        if tool_name in ("google_trends_interest", "google_trends_related"):
+            return pytrends_tools.execute_tool(tool_name, tool_input)
+        # FRED macroeconomic tools
+        if tool_name in ("fred_get_series", "fred_search_series"):
+            return fred_tools.execute_tool(tool_name, tool_input)
+        # GitHub tools
+        if tool_name in ("github_search_repos", "github_repo_stats"):
+            return github_tools.execute_tool(tool_name, tool_input)
+        # Patent tools
+        if tool_name in ("search_patents", "get_patent_detail"):
+            return patents_tools.execute_tool(tool_name, tool_input)
         return _tool_error(tool_name, f"Unknown tool '{tool_name}'", "web_search")
     except Exception as exc:
         return _tool_error(tool_name, str(exc), _fallback_for(tool_name))
@@ -108,14 +131,22 @@ def execute_tool_call(tool_name: str, tool_input: dict) -> str:
 def _fallback_for(tool_name: str) -> str:
     """Return the recommended fallback tool name for a given tool."""
     _fallbacks = {
-        "get_sec_filings":       "web_search",
-        "get_company_facts":     "web_search",
-        "yf_get_info":           "web_search",
-        "yf_get_financials":     "web_search",
-        "yf_get_analyst_data":   "web_search",
-        "extract_pdf_text":      "web_search",
-        "extract_pdf_tables":    "web_search",
-        "news_search":           "web_search",
+        "get_sec_filings":          "web_search",
+        "get_company_facts":        "web_search",
+        "yf_get_info":              "web_search",
+        "yf_get_financials":        "web_search",
+        "yf_get_analyst_data":      "web_search",
+        "extract_pdf_text":         "web_search",
+        "extract_pdf_tables":       "web_search",
+        "news_search":              "web_search",
+        "google_trends_interest":   "web_search",
+        "google_trends_related":    "web_search",
+        "fred_get_series":          "web_search",
+        "fred_search_series":       "web_search",
+        "github_search_repos":      "web_search",
+        "github_repo_stats":        "web_search",
+        "search_patents":           "web_search",
+        "get_patent_detail":        "web_search",
     }
     return _fallbacks.get(tool_name, "web_search")
 

@@ -418,7 +418,7 @@ AGENT_PHASES = [
                     "Checks for revenue concentration risk and accounting red flags",
                     "Compares metrics against industry benchmarks",
                 ],
-                "sources": ["SEC EDGAR (10-K, 10-Q, 8-K)", "Web search", "Uploaded PDFs"],
+                "sources": ["SEC EDGAR (10-K, 10-Q, 8-K)", "Yahoo Finance (yfinance)", "Web search", "Uploaded PDFs"],
             },
             {
                 "icon": "🌍",
@@ -431,7 +431,7 @@ AGENT_PHASES = [
                     "Evaluates company positioning and differentiation vs. rivals",
                     "Assesses barriers to entry and market defensibility",
                 ],
-                "sources": ["Web search", "News search", "Industry reports"],
+                "sources": ["Web search", "News search", "Google Trends (pytrends)", "FRED macroeconomic data", "Industry reports"],
             },
             {
                 "icon": "⚖️",
@@ -444,7 +444,7 @@ AGENT_PHASES = [
                     "Evaluates data privacy posture (GDPR, CCPA) and ESG exposure",
                     "Flags corporate governance red flags and insider conflicts",
                 ],
-                "sources": ["Web search", "News search", "Uploaded PDFs (legal docs)"],
+                "sources": ["Web search", "News search", "USPTO PatentsView (patent database)", "Uploaded PDFs (legal docs)"],
             },
             {
                 "icon": "👥",
@@ -470,7 +470,7 @@ AGENT_PHASES = [
                     "Measures product-market fit signals (NPS, churn, retention)",
                     "Benchmarks engineering team size and development velocity",
                 ],
-                "sources": ["Web search", "News search", "GitHub (via web)", "Product reviews"],
+                "sources": ["Web search", "News search", "GitHub API (repos, commit activity, contributors)", "Google Trends (pytrends)", "USPTO PatentsView"],
             },
         ],
     },
@@ -517,7 +517,7 @@ AGENT_PHASES = [
                     "Produces a fair value range (low / mid / high) with confidence intervals",
                     "Calculates implied upside/downside to current valuation",
                 ],
-                "sources": ["Web search (comps, M&A data)", "Phase 1 financial & market reports"],
+                "sources": ["Yahoo Finance (yfinance — live multiples, analyst targets)", "Web search", "Phase 1 financial & market reports"],
             },
             {
                 "icon": "🚩",

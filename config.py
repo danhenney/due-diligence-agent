@@ -14,6 +14,16 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 # SEC EDGAR
 EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "DueDiligenceAgent contact@example.com")
 
+# Optional — improves macro data (free key at fred.stlouisfed.org)
+FRED_API_KEY = os.getenv("FRED_API_KEY", "")
+
+# Optional — increases GitHub API rate limit from 60 to 5000 req/hr
+# Create a free token at github.com/settings/tokens (no scopes needed)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+# Optional — USPTO patent search (free key at search.patentsview.org/docs)
+PATENTSVIEW_API_KEY = os.getenv("PATENTSVIEW_API_KEY", "")
+
 # Persistence
 CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./checkpoints.db")
 
