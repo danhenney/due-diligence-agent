@@ -90,7 +90,7 @@
 
       <!-- Info box -->
       <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-        <p class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">What our 13 agents analyze</p>
+        <p class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">12 specialist agents + orchestrator quality gates</p>
         <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
           <span>• Financial health &amp; ratios</span>
           <span>• Market size &amp; competition</span>
@@ -105,6 +105,7 @@
           <span>• Completeness review</span>
           <span>• Investment memo</span>
         </div>
+        <p class="text-xs text-slate-400 mt-2">After each phase, an orchestrator scores outputs and revises weak agents before proceeding.</p>
       </div>
 
       <!-- Submit -->
@@ -163,6 +164,7 @@
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="legal_risk">Legal Risk</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="management_team">Management</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="tech_product">Tech &amp; Product</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium border border-indigo-200" data-agent="phase1_check">Orchestrator Check</span>
       </div>
     </div>
 
@@ -177,6 +179,7 @@
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="bear_case">Bear Case</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="valuation">Valuation</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="red_flag">Red Flags</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium border border-violet-200" data-agent="phase2_check">Orchestrator Check</span>
       </div>
     </div>
 
@@ -190,6 +193,7 @@
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="fact_checker">Fact Checker</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="stress_test">Stress Test</span>
         <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium" data-agent="completeness">Completeness</span>
+        <span class="chip chip-pending px-3 py-1 rounded-full text-xs font-medium border border-amber-200" data-agent="phase3_check">Orchestrator Check</span>
       </div>
     </div>
 
@@ -394,13 +398,16 @@ function stopTimer() {
 // ── Chip state machine ────────────────────────────────────────────────────────
 const NODE_MAP = {
   input_processor:   { action: 'phase1-start' },
-  phase1_parallel:   { action: 'phase1-done' },
-  phase1_aggregator: { action: 'phase2-start' },
-  phase2_parallel:   { action: 'phase2-done' },
-  phase2_aggregator: { action: 'phase3-fc-running' },
-  fact_checker:      { action: 'phase3-st-running' },
-  stress_test:       { action: 'phase3-co-running' },
-  completeness:      { action: 'phase4-start' },
+  phase1_parallel:   { action: 'phase1-agents-done' },
+  phase1_aggregator: { action: 'phase1-check-start' },
+  phase1_check:      { action: 'phase1-check-done' },
+  phase2_parallel:   { action: 'phase2-agents-done' },
+  phase2_aggregator: { action: 'phase2-check-start' },
+  phase2_check:      { action: 'phase2-check-done' },
+  fact_checker:      { action: 'phase3-fc-done' },
+  stress_test:       { action: 'phase3-st-done' },
+  completeness:      { action: 'phase3-co-done' },
+  phase3_check:      { action: 'phase3-check-done' },
   final_report_agent:{ action: 'phase4-done' },
 };
 
@@ -434,28 +441,40 @@ function handleNodeEvent(node) {
     case 'phase1-start':
       setGroupChips('phase1-chips', P1_AGENTS, 'running');
       break;
-    case 'phase1-done':
+    case 'phase1-agents-done':
       setGroupChips('phase1-chips', P1_AGENTS, 'done');
       break;
-    case 'phase2-start':
+    case 'phase1-check-start':
+      setChip('phase1-chips', 'phase1_check', 'running');
+      break;
+    case 'phase1-check-done':
+      setChip('phase1-chips', 'phase1_check', 'done');
       setGroupChips('phase2-chips', P2_AGENTS, 'running');
       break;
-    case 'phase2-done':
+    case 'phase2-agents-done':
       setGroupChips('phase2-chips', P2_AGENTS, 'done');
       break;
-    case 'phase3-fc-running':
+    case 'phase2-check-start':
+      setChip('phase2-chips', 'phase2_check', 'running');
+      break;
+    case 'phase2-check-done':
+      setChip('phase2-chips', 'phase2_check', 'done');
       setChip('phase3-chips', 'fact_checker', 'running');
       break;
-    case 'phase3-st-running':
+    case 'phase3-fc-done':
       setChip('phase3-chips', 'fact_checker', 'done');
       setChip('phase3-chips', 'stress_test', 'running');
       break;
-    case 'phase3-co-running':
+    case 'phase3-st-done':
       setChip('phase3-chips', 'stress_test', 'done');
       setChip('phase3-chips', 'completeness', 'running');
       break;
-    case 'phase4-start':
+    case 'phase3-co-done':
       setChip('phase3-chips', 'completeness', 'done');
+      setChip('phase3-chips', 'phase3_check', 'running');
+      break;
+    case 'phase3-check-done':
+      setChip('phase3-chips', 'phase3_check', 'done');
       setChip('phase4-chips', 'final_report_agent', 'running');
       break;
     case 'phase4-done':

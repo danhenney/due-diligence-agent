@@ -50,7 +50,7 @@ Return a JSON object with this exact structure:
 """
 
 
-def run(state: DueDiligenceState) -> dict:
+def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     company = state["company_name"]
     url = state.get("company_url") or ""
     docs = state.get("uploaded_docs") or []
@@ -64,6 +64,13 @@ def run(state: DueDiligenceState) -> dict:
         "Search for litigation, regulatory actions, IP issues, and governance concerns. "
         "Return your findings as the specified JSON object."
     )
+
+    if revision_brief:
+        user_message += (
+            f"\n\nORCHESTRATOR REVISION REQUEST:\n{revision_brief}\n"
+            "Please specifically address this feedback in your revised analysis, "
+            "using your available tools to fetch any missing or stale data."
+        )
 
     result = run_agent(
         agent_type="legal_risk",

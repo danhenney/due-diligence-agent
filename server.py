@@ -67,9 +67,11 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str]):
             "completeness": None,
             "final_report": None,
             "recommendation": None,
+            "orchestrator_briefing": None,
             "messages": [],
             "errors": [],
             "current_phase": "init",
+            "language": "English",
         }
 
         merged: dict[str, Any] = {}

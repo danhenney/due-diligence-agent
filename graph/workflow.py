@@ -1,4 +1,19 @@
-"""LangGraph StateGraph construction for the due diligence pipeline."""
+"""LangGraph StateGraph construction for the due diligence pipeline.
+
+Flow:
+  START → input_processor
+        → phase1_parallel (5 agents, concurrent)
+        → phase1_aggregator
+        → phase1_check          ← quality gate: evaluate + revise Phase 1 agents
+        → phase2_parallel (4 agents, concurrent)
+        → phase2_aggregator
+        → phase2_check          ← quality gate: evaluate + revise Phase 2 agents
+        → fact_checker → stress_test → completeness
+        → phase3_check          ← quality gate: evaluate + revise Phase 3 agents
+                                   + full synthesis + preliminary recommendation
+        → final_report_agent
+        → END
+"""
 from __future__ import annotations
 
 import time as _time
@@ -21,17 +36,13 @@ from agents.phase1 import (
 )
 from agents.phase2 import bull_case, bear_case, valuation, red_flag
 from agents.phase3 import fact_checker, stress_test, completeness
-from agents.orchestrator import orchestrator
+from agents.orchestrator import phase1_check, phase2_check, phase3_check
 from agents.phase4 import final_report
 from agents.base import get_and_reset_usage
 
 
 def _run_agent_with_usage(fn, state: Any) -> tuple[dict, dict]:
-    """Run an agent function and return (result, token_usage) tuple.
-
-    Captures the thread-local usage counter so parallel phases can collect
-    per-sub-agent token counts from their worker threads.
-    """
+    """Run an agent function and return (result, token_usage) tuple."""
     result = fn(state)
     usage = get_and_reset_usage()
     return result, usage
@@ -69,8 +80,6 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
     errors = []
     agent_usage: dict[str, dict] = {}
 
-    # Stagger starts by 3 s to avoid all 5 agents hitting the API simultaneously
-    # and triggering rate-limit backoffs that stack.
     future_to_name: dict = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
         for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
@@ -95,8 +104,13 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
 
 
 def phase1_aggregator(state: DueDiligenceState) -> dict:
-    """Lightweight aggregator after phase 1 — just marks phase transition."""
-    return {"current_phase": "phase2"}
+    """Lightweight aggregator after Phase 1 — marks phase transition."""
+    return {"current_phase": "phase1_check"}
+
+
+def phase1_check_node(state: DueDiligenceState) -> dict:
+    """Quality gate: score Phase 1 agents and re-run weak ones."""
+    return phase1_check.run(state)
 
 
 def phase2_parallel(state: DueDiligenceState) -> dict:
@@ -136,7 +150,12 @@ def phase2_parallel(state: DueDiligenceState) -> dict:
 
 
 def phase2_aggregator(state: DueDiligenceState) -> dict:
-    return {"current_phase": "phase3"}
+    return {"current_phase": "phase2_check"}
+
+
+def phase2_check_node(state: DueDiligenceState) -> dict:
+    """Quality gate: score Phase 2 agents and re-run weak ones."""
+    return phase2_check.run(state)
 
 
 def fact_checker_node(state: DueDiligenceState) -> dict:
@@ -151,8 +170,9 @@ def completeness_node(state: DueDiligenceState) -> dict:
     return completeness.run(state)
 
 
-def orchestrator_node(state: DueDiligenceState) -> dict:
-    return orchestrator.run(state)
+def phase3_check_node(state: DueDiligenceState) -> dict:
+    """Quality gate: score Phase 3 agents, revise weak ones, then synthesize."""
+    return phase3_check.run(state)
 
 
 def final_report_node(state: DueDiligenceState) -> dict:
@@ -162,39 +182,36 @@ def final_report_node(state: DueDiligenceState) -> dict:
 # ── Graph builder ─────────────────────────────────────────────────────────────
 
 def build_graph(use_checkpointing: bool = True):
-    """Build and compile the LangGraph StateGraph.
-
-    Args:
-        use_checkpointing: If True, attach a SQLite checkpointer for resumability.
-
-    Returns:
-        Compiled LangGraph app.
-    """
+    """Build and compile the LangGraph StateGraph."""
     builder = StateGraph(DueDiligenceState)
 
     # Register nodes
-    builder.add_node("input_processor", input_processor)
-    builder.add_node("phase1_parallel", phase1_parallel)
+    builder.add_node("input_processor",   input_processor)
+    builder.add_node("phase1_parallel",   phase1_parallel)
     builder.add_node("phase1_aggregator", phase1_aggregator)
-    builder.add_node("phase2_parallel", phase2_parallel)
+    builder.add_node("phase1_check",      phase1_check_node)
+    builder.add_node("phase2_parallel",   phase2_parallel)
     builder.add_node("phase2_aggregator", phase2_aggregator)
-    builder.add_node("fact_checker", fact_checker_node)
-    builder.add_node("stress_test", stress_test_node)
-    builder.add_node("completeness", completeness_node)
-    builder.add_node("orchestrator", orchestrator_node)
+    builder.add_node("phase2_check",      phase2_check_node)
+    builder.add_node("fact_checker",      fact_checker_node)
+    builder.add_node("stress_test",       stress_test_node)
+    builder.add_node("completeness",      completeness_node)
+    builder.add_node("phase3_check",      phase3_check_node)
     builder.add_node("final_report_agent", final_report_node)
 
     # Wire edges
-    builder.add_edge(START, "input_processor")
-    builder.add_edge("input_processor", "phase1_parallel")
-    builder.add_edge("phase1_parallel", "phase1_aggregator")
-    builder.add_edge("phase1_aggregator", "phase2_parallel")
-    builder.add_edge("phase2_parallel", "phase2_aggregator")
-    builder.add_edge("phase2_aggregator", "fact_checker")
-    builder.add_edge("fact_checker", "stress_test")
-    builder.add_edge("stress_test", "completeness")
-    builder.add_edge("completeness", "orchestrator")
-    builder.add_edge("orchestrator", "final_report_agent")
+    builder.add_edge(START,              "input_processor")
+    builder.add_edge("input_processor",  "phase1_parallel")
+    builder.add_edge("phase1_parallel",  "phase1_aggregator")
+    builder.add_edge("phase1_aggregator","phase1_check")      # ← quality gate
+    builder.add_edge("phase1_check",     "phase2_parallel")
+    builder.add_edge("phase2_parallel",  "phase2_aggregator")
+    builder.add_edge("phase2_aggregator","phase2_check")      # ← quality gate
+    builder.add_edge("phase2_check",     "fact_checker")
+    builder.add_edge("fact_checker",     "stress_test")
+    builder.add_edge("stress_test",      "completeness")
+    builder.add_edge("completeness",     "phase3_check")      # ← quality gate + synthesis
+    builder.add_edge("phase3_check",     "final_report_agent")
     builder.add_edge("final_report_agent", END)
 
     if use_checkpointing:

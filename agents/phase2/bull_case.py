@@ -35,7 +35,7 @@ Return a JSON object with this exact structure:
 """
 
 
-def run(state: DueDiligenceState) -> dict:
+def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     phase1_context = compact({
         "financial": slim_financial(state.get("financial_report")),
         "market":    slim_market(state.get("market_report")),
@@ -55,6 +55,13 @@ def run(state: DueDiligenceState) -> dict:
         "price / market cap from the tool call — not training memory.\n\n"
         "Return the specified JSON object."
     )
+
+    if revision_brief:
+        user_message += (
+            f"\n\nORCHESTRATOR REVISION REQUEST:\n{revision_brief}\n"
+            "Please specifically address this feedback in your revised analysis, "
+            "using your available tools to fetch any missing or stale data."
+        )
 
     result = run_agent(
         agent_type="bull_case",

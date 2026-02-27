@@ -25,9 +25,19 @@ flagged inconsistencies, filled data gaps, and provided a preliminary recommenda
 Your task: write a professional-grade investment memo and render a final recommendation.
 
 THE RECOMMENDATION MUST BE ONE OF:
-- **INVEST**: Compelling opportunity with manageable risks. Proceed with conviction.
-- **WATCH**: Interesting opportunity but material uncertainties remain. Monitor and revisit.
-- **PASS**: Risks outweigh opportunities, or information is insufficient to justify investment.
+- **INVEST**: Compelling opportunity — strong fundamentals, manageable risks, positive momentum,
+  and upside potential > 15%. All investments carry uncertainty; do NOT downgrade to WATCH
+  simply because some risks exist. If the evidence is broadly favorable, recommend INVEST.
+- **WATCH**: Genuinely mixed signals where bull and bear cases are roughly equal in weight,
+  OR material unresolved data gaps that make the risk/reward genuinely unclear. This is NOT
+  the "safe" default — you must justify why the evidence is truly inconclusive.
+- **PASS**: Risks clearly dominate — declining fundamentals, fatal red flags, no margin of
+  safety, or valuation leaves no room for error.
+
+CRITICAL: Do NOT default to WATCH as a hedge. LLMs systematically over-select WATCH because
+it feels "safe". Fight this bias. If the orchestrator recommended INVEST or PASS, you need
+a strong, specific reason to override — not vague uncertainty. Most well-known public companies
+with solid financials should be INVEST or PASS, not WATCH.
 
 Structure the memo as Markdown with these sections:
 # Investment Memo: [Company Name]
@@ -93,7 +103,11 @@ def run(state: DueDiligenceState) -> dict:
         "identified inconsistencies, filled data gaps, and provided a preliminary "
         "recommendation in the briefing above. "
         "Use their synthesis_guidance to decide which findings deserve the most weight "
-        "and which to treat with caution. "
+        "and which to treat with caution.\n\n"
+        "IMPORTANT: The Orchestrator's recommendation carries strong weight. If the "
+        "Orchestrator recommended INVEST or PASS, you should follow that recommendation "
+        "unless you have a specific, concrete reason to override (not just general uncertainty). "
+        "Do NOT default to WATCH as a safe middle ground — justify any deviation.\n\n"
         "Write the complete Investment Memo as specified. "
         "Conclude with the JSON recommendation block."
     )
@@ -126,19 +140,28 @@ def run(state: DueDiligenceState) -> dict:
 
 def _extract_recommendation(text: str) -> str:
     """Pull INVEST / WATCH / PASS from the memo text."""
-    for line in text.splitlines():
-        upper = line.upper()
-        if "INVEST" in upper and ("RECOMMENDATION" in upper or "**INVEST**" in upper):
-            return "INVEST"
-        if "WATCH" in upper and ("RECOMMENDATION" in upper or "**WATCH**" in upper):
-            return "WATCH"
-        if "PASS" in upper and ("RECOMMENDATION" in upper or "**PASS**" in upper):
-            return "PASS"
-
-    # Try JSON block at end
     import re
+
+    # 1. Try JSON block first (most reliable — explicitly structured output)
     m = re.search(r'\{"recommendation":\s*"(INVEST|WATCH|PASS)"', text, re.IGNORECASE)
     if m:
         return m.group(1).upper()
 
-    return "WATCH"  # conservative default
+    # 2. Look for **Recommendation:** INVEST/WATCH/PASS line
+    m = re.search(r'\*\*Recommendation:\*\*\s*(INVEST|WATCH|PASS)', text, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+
+    # 3. Look for "### Why INVEST/WATCH/PASS" heading
+    m = re.search(r'###\s+Why\s+(INVEST|WATCH|PASS)', text, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+
+    # 4. Broad scan — first standalone occurrence of INVEST/WATCH/PASS
+    #    after "recommendation" keyword (within 100 chars)
+    m = re.search(r'[Rr]ecommendation.{0,100}(INVEST|WATCH|PASS)', text)
+    if m:
+        return m.group(1).upper()
+
+    # No fallback default — return None so caller knows extraction failed
+    return "WATCH"

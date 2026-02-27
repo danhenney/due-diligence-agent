@@ -37,7 +37,7 @@ Return a JSON object with this exact structure:
 """
 
 
-def run(state: DueDiligenceState) -> dict:
+def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     """Execute the financial analyst agent and return state update."""
     company = state["company_name"]
     url = state.get("company_url") or ""
@@ -61,6 +61,13 @@ def run(state: DueDiligenceState) -> dict:
         "web_search for private-company data, and any uploaded documents.\n\n"
         "Return your findings as the specified JSON object."
     )
+
+    if revision_brief:
+        user_message += (
+            f"\n\nORCHESTRATOR REVISION REQUEST:\n{revision_brief}\n"
+            "Please specifically address this feedback in your revised analysis, "
+            "using your available tools to fetch any missing or stale data."
+        )
 
     result = run_agent(
         agent_type="financial_analyst",

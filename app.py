@@ -254,7 +254,7 @@ _UI = {
         "cost_caption":         "Typical cost: **$1 – $5 per analysis** · 13 agents · claude-sonnet-4-6 · $3/M input · $15/M output",
         "run_btn":              "🔍  Run Due Diligence",
         "pipeline_heading":     "#### Agent Pipeline Flow",
-        "pipeline_caption":     "Phases 1 & 2 run agents in parallel. Phase 3 is sequential (order matters).",
+        "pipeline_caption":     "Orchestrator reviews each phase — scores agents, revises weak ones (red dashed), then passes to the next phase.",
         "directory_heading":    "#### Agent Directory",
         "directory_caption":    "Click any agent to see its methodology and data sources.",
         "how_it_works":         "**How it works:**",
@@ -315,7 +315,7 @@ _UI = {
         "cost_caption":         "예상 비용: **분석당 $1 – $5** · 에이전트 13개 · claude-sonnet-4-6 · 입력 $3/M · 출력 $15/M",
         "run_btn":              "🔍  실사 분석 시작",
         "pipeline_heading":     "#### 에이전트 파이프라인",
-        "pipeline_caption":     "1·2단계는 에이전트를 병렬 실행합니다. 3단계는 순차 실행입니다.",
+        "pipeline_caption":     "오케스트레이터가 각 단계를 검토 — 에이전트 점수 평가, 약한 에이전트 재실행(빨간 점선), 통과 후 다음 단계로 진행.",
         "directory_heading":    "#### 에이전트 목록",
         "directory_caption":    "에이전트를 클릭하면 분석 방법론과 데이터 소스를 확인할 수 있습니다.",
         "how_it_works":         "**분석 방법:**",
@@ -381,12 +381,14 @@ _NODE_LABELS_EN = {
     "input_processor":    "🔍 Processing inputs",
     "phase1_parallel":    "📊 Phase 1 — 5 research agents ran in parallel",
     "phase1_aggregator":  "✅ Phase 1 aggregated",
+    "phase1_check":       "🎯 Phase 1 quality check — scoring & revising agents",
     "phase2_parallel":    "📈 Phase 2 — 4 analysis agents ran in parallel",
     "phase2_aggregator":  "✅ Phase 2 aggregated",
+    "phase2_check":       "🎯 Phase 2 quality check — scoring & revising agents",
     "fact_checker":       "🔎 Fact-checking all claims",
     "stress_test":        "⚡ Stress-testing downside scenarios",
     "completeness":       "📋 Coverage & completeness review",
-    "orchestrator":       "🎯 Orchestrator — quality gate & gap fill",
+    "phase3_check":       "🎯 Phase 3 quality check — revisions + final synthesis",
     "final_report_agent": "📝 Writing investment memo",
 }
 
@@ -394,26 +396,30 @@ _NODE_LABELS_KO = {
     "input_processor":    "🔍 입력 처리 중",
     "phase1_parallel":    "📊 1단계 — 리서치 에이전트 5개 병렬 실행",
     "phase1_aggregator":  "✅ 1단계 집계 완료",
+    "phase1_check":       "🎯 1단계 품질 검토 — 에이전트 평가 및 수정",
     "phase2_parallel":    "📈 2단계 — 분석 에이전트 4개 병렬 실행",
     "phase2_aggregator":  "✅ 2단계 집계 완료",
+    "phase2_check":       "🎯 2단계 품질 검토 — 에이전트 평가 및 수정",
     "fact_checker":       "🔎 모든 주장 팩트체크",
     "stress_test":        "⚡ 하방 시나리오 스트레스 테스트",
     "completeness":       "📋 커버리지 & 완성도 검토",
-    "orchestrator":       "🎯 오케스트레이터 — 품질 검토 & 데이터 보완",
+    "phase3_check":       "🎯 3단계 품질 검토 — 수정 + 최종 종합",
     "final_report_agent": "📝 투자 메모 작성 중",
 }
 
 # Weighted % of total runtime each node typically consumes (must sum to 100)
 NODE_WEIGHTS = {
     "input_processor":    2,
-    "phase1_parallel":    33,
+    "phase1_parallel":    30,
     "phase1_aggregator":  1,
-    "phase2_parallel":    26,
+    "phase1_check":       4,
+    "phase2_parallel":    24,
     "phase2_aggregator":  1,
+    "phase2_check":       4,
     "fact_checker":       11,
     "stress_test":        8,
-    "completeness":       5,
-    "orchestrator":       7,
+    "completeness":       4,
+    "phase3_check":       5,
     "final_report_agent": 6,
 }
 
@@ -432,7 +438,7 @@ digraph pipeline {
     inp [label="Input\nProcessor" fillcolor="#e0e7ff" color="#6366f1" fontcolor="#3730a3"];
 
     subgraph cluster_p1 {
-        label="Phase 1  ⟵  Parallel" fontsize=9 color="#2563eb"
+        label="Phase 1  —  Parallel" fontsize=9 color="#2563eb"
         fillcolor="#eff6ff" style="rounded,filled";
         fin  [label="Financial\nAnalyst"  fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
         mkt  [label="Market\nResearch"   fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
@@ -441,11 +447,11 @@ digraph pipeline {
         tech [label="Tech &\nProduct"    fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
     }
 
-    agg1 [label="⬇" shape=diamond fillcolor="#dbeafe" color="#2563eb"
-          width=0.3 height=0.3 fontsize=11];
+    orch1 [label="Orchestrator\nCheck" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
+           shape=octagon fontsize=8];
 
     subgraph cluster_p2 {
-        label="Phase 2  ⟵  Parallel" fontsize=9 color="#7c3aed"
+        label="Phase 2  —  Parallel" fontsize=9 color="#7c3aed"
         fillcolor="#f5f3ff" style="rounded,filled";
         bull [label="Bull Case"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
         bear [label="Bear Case"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
@@ -453,36 +459,40 @@ digraph pipeline {
         red  [label="Red Flags"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
     }
 
-    agg2 [label="⬇" shape=diamond fillcolor="#ede9fe" color="#7c3aed"
-          width=0.3 height=0.3 fontsize=11];
+    orch2 [label="Orchestrator\nCheck" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
+           shape=octagon fontsize=8];
 
     subgraph cluster_p3 {
-        label="Phase 3  ⟵  Sequential" fontsize=9 color="#d97706"
+        label="Phase 3  —  Sequential" fontsize=9 color="#d97706"
         fillcolor="#fffbeb" style="rounded,filled";
         fact   [label="Fact\nChecker"  fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
         stress [label="Stress\nTest"   fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
         comp   [label="Complete-\nness" fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
     }
 
-    subgraph cluster_orch {
-        label="Orchestrator" fontsize=9 color="#059669"
-        fillcolor="#ecfdf5" style="rounded,filled";
-        orch [label="Quality Gate\n& Gap Fill" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"];
-    }
+    orch3 [label="Orchestrator\nCheck &\nSynthesis" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
+           shape=octagon fontsize=8];
 
     final [label="Final\nReport" fillcolor="#d1fae5" color="#059669" fontcolor="#064e3b"];
 
     START -> inp;
     inp -> fin; inp -> mkt; inp -> leg; inp -> mgmt; inp -> tech;
-    fin -> agg1; mkt -> agg1; leg -> agg1; mgmt -> agg1; tech -> agg1;
-    agg1 -> bull; agg1 -> bear; agg1 -> val; agg1 -> red;
-    bull -> agg2; bear -> agg2; val -> agg2; red -> agg2;
-    agg2 -> fact;
+    fin -> orch1; mkt -> orch1; leg -> orch1; mgmt -> orch1; tech -> orch1;
+    orch1 -> bull [label=" pass " fontsize=7 color="#059669"];
+    orch1 -> bear; orch1 -> val; orch1 -> red;
+    bull -> orch2; bear -> orch2; val -> orch2; red -> orch2;
+    orch2 -> fact [label=" pass " fontsize=7 color="#059669"];
     fact -> stress [label="  then  " fontsize=7 color="#d97706"];
     stress -> comp [label="  then  " fontsize=7 color="#d97706"];
-    comp -> orch [label="  review  " fontsize=7 color="#059669"];
-    orch -> final;
+    comp -> orch3;
+    orch3 -> final [label=" pass " fontsize=7 color="#059669"];
     final -> END;
+
+    // Revision feedback edges (dashed)
+    edge [style=dashed color="#dc2626" arrowsize=0.5];
+    orch1 -> fin  [label="revise" fontsize=6 color="#dc2626"];
+    orch2 -> bull [label="revise" fontsize=6 color="#dc2626"];
+    orch3 -> fact [label="revise" fontsize=6 color="#dc2626"];
 }
 """
 
@@ -669,24 +679,56 @@ AGENT_PHASES = [
         ],
     },
     {
-        "label": "Phase 4 — Final Synthesis",
+        "label": "Orchestrator — Quality Gates",
         "color": "#059669",
-        "bg": "#f0fdf4",
-        "description": "The **Orchestrator** reviews all 11 prior agents, scores quality, fills gaps, and flags inconsistencies. The **Final Report Agent** then writes the investment memo guided by the Orchestrator's briefing.",
+        "bg": "#ecfdf5",
+        "description": "The **Orchestrator** runs after **each phase**, not just at the end. It scores every agent's output, revises weak ones (score < 0.65), and only passes to the next phase when quality is sufficient. After Phase 3, it also performs a full synthesis with live tools.",
         "agents": [
             {
                 "icon": "🎯",
-                "name": "Orchestrator",
-                "role": "Investment Committee Director — quality gate, gap filler, and synthesis guide.",
+                "name": "Phase 1 Check",
+                "role": "Evaluates all 5 Phase 1 agents. Revises weak ones before Phase 2 begins.",
                 "methodology": [
-                    "Scores each of the 11 prior agents on output quality (0.0–1.0) and identifies their key data gaps",
-                    "Flags cross-agent inconsistencies (e.g. bull case projections not supported by financial data)",
-                    "Uses live tools (yfinance, web search, news) to fill the 3–5 most critical data gaps",
-                    "Identifies which findings are most reliable and which to treat with caution",
-                    "Renders a preliminary investment recommendation that guides the Final Report agent",
+                    "Scores each Phase 1 agent (0.0–1.0) based on depth, sourcing, and completeness",
+                    "Agents scoring below 0.65 are flagged for revision with specific actionable feedback",
+                    "Re-runs up to 3 weak agents with targeted revision briefs (worst first)",
+                    "Only passes to Phase 2 once quality threshold is met",
                 ],
-                "sources": ["All 11 prior agent outputs", "Yahoo Finance (yfinance — live verification)", "Web search", "News search", "SEC EDGAR"],
+                "sources": ["Phase 1 agent outputs (financial, market, legal, management, tech)"],
             },
+            {
+                "icon": "🎯",
+                "name": "Phase 2 Check",
+                "role": "Evaluates all 4 Phase 2 agents. Revises weak ones before Phase 3 begins.",
+                "methodology": [
+                    "Scores each Phase 2 agent (0.0–1.0) on analytical rigor and evidence quality",
+                    "Agents scoring below 0.65 are flagged for revision with specific actionable feedback",
+                    "Re-runs up to 3 weak agents with targeted revision briefs (worst first)",
+                    "Only passes to Phase 3 once quality threshold is met",
+                ],
+                "sources": ["Phase 2 agent outputs (bull case, bear case, valuation, red flags)"],
+            },
+            {
+                "icon": "🎯",
+                "name": "Phase 3 Check & Synthesis",
+                "role": "Evaluates Phase 3 agents, then synthesizes all 11 outputs into a briefing with live data.",
+                "methodology": [
+                    "Scores Phase 3 agents and revises weak ones (same process as Phase 1 & 2 checks)",
+                    "Uses live tools (yfinance, web search, news) to fill remaining critical data gaps",
+                    "Flags cross-agent inconsistencies and resolves contradictions",
+                    "Identifies most vs. least reliable findings across all 11 agents",
+                    "Renders a preliminary investment recommendation (INVEST / WATCH / PASS) for the Final Report",
+                ],
+                "sources": ["All 11 prior agent outputs", "Yahoo Finance (live verification)", "Web search", "News search"],
+            },
+        ],
+    },
+    {
+        "label": "Phase 4 — Investment Memo",
+        "color": "#1e40af",
+        "bg": "#eff6ff",
+        "description": "The **Final Report Agent** writes the complete investment memo, guided by the Orchestrator's synthesis briefing and all prior agent outputs.",
+        "agents": [
             {
                 "icon": "📝",
                 "name": "Final Report Agent",
@@ -698,7 +740,7 @@ AGENT_PHASES = [
                     "Writes a full Markdown investment memo (Executive Summary → Recommendation Rationale)",
                     "Issues **INVEST** (compelling upside, manageable risks), **WATCH** (interesting but uncertain), or **PASS** (risks outweigh opportunity)",
                 ],
-                "sources": ["All 12 prior agent outputs + Orchestrator briefing"],
+                "sources": ["All 11 agent outputs + Orchestrator synthesis briefing"],
             },
         ],
     },
@@ -743,10 +785,18 @@ def _get_agent_phases(lang: str) -> list:
             ],
         },
         {
-            "label": "4단계 — 최종 종합",
-            "description": "**오케스트레이터**가 11개 에이전트 결과를 검토하고 품질 점수, 갭 보완, 불일치 플래그를 처리합니다. **최종 보고서 에이전트**는 오케스트레이터의 브리핑을 토대로 투자 메모를 작성합니다.",
+            "label": "오케스트레이터 — 품질 게이트",
+            "description": "**오케스트레이터**는 **각 단계 후** 실행됩니다. 에이전트 출력을 점수 매기고, 약한 에이전트를 재실행하며, 품질이 충분할 때만 다음 단계로 진행합니다. 3단계 이후에는 라이브 도구로 전체 종합도 수행합니다.",
             "agents": [
-                ("🎯", "오케스트레이터", "투자위원회 디렉터 — 품질 검토, 데이터 갭 보완, 종합 가이드 제공"),
+                ("🎯", "1단계 검토", "5개 1단계 에이전트를 평가하고 약한 에이전트를 재실행합니다."),
+                ("🎯", "2단계 검토", "4개 2단계 에이전트를 평가하고 약한 에이전트를 재실행합니다."),
+                ("🎯", "3단계 검토 & 종합", "3단계 에이전트 평가 + 라이브 데이터로 전체 종합 브리핑을 작성합니다."),
+            ],
+        },
+        {
+            "label": "4단계 — 투자 메모",
+            "description": "**최종 보고서 에이전트**가 오케스트레이터의 종합 브리핑과 모든 에이전트 결과를 토대로 투자 메모를 작성합니다.",
+            "agents": [
                 ("📝", "최종 보고서 에이전트", "11개 에이전트 결과 + 오케스트레이터 브리핑을 종합하여 투자 메모를 작성합니다."),
             ],
         },
