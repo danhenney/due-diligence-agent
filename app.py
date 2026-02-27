@@ -37,44 +37,52 @@ def _save_history_entry(entry: dict) -> None:
 
 
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
-    """Runs in a daemon thread. Writes progress + result into _JOBS[job_id]."""
-    import asyncio
-
-    # LangGraph's sync stream() uses asyncio internally.
-    # Background threads have no event loop by default — create one explicitly.
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
+    """Runs in a daemon thread. Calls node functions directly — avoids LangGraph
+    stream()/asyncio conflicts in background threads."""
     try:
-        from graph.workflow import build_graph
         import pdf_report
+        from graph.workflow import (
+            input_processor, phase1_parallel, phase1_aggregator,
+            phase2_parallel, phase2_aggregator,
+            fact_checker_node, stress_test_node,
+            completeness_node, final_report_node,
+        )
 
-        graph = build_graph(use_checkpointing=False)
-        merged: dict = {}
+        state: dict = dict(initial_state)
         progress: list[str] = []
 
-        for step in graph.stream(initial_state, stream_mode="updates"):
-            for node_name, output in step.items():
-                merged.update(output)
-                progress.append(node_name)
-                with _JOBS_LOCK:
-                    _JOBS[job_id]["progress"] = progress.copy()
+        def _step(fn, node_name: str) -> None:
+            result = fn(state)
+            state.update(result)
+            progress.append(node_name)
+            with _JOBS_LOCK:
+                _JOBS[job_id]["progress"] = progress.copy()
 
-        pdf_path = pdf_report.generate_pdf(merged, job_id)
+        _step(input_processor,    "input_processor")
+        _step(phase1_parallel,    "phase1_parallel")
+        _step(phase1_aggregator,  "phase1_aggregator")
+        _step(phase2_parallel,    "phase2_parallel")
+        _step(phase2_aggregator,  "phase2_aggregator")
+        _step(fact_checker_node,  "fact_checker")
+        _step(stress_test_node,   "stress_test")
+        _step(completeness_node,  "completeness")
+        _step(final_report_node,  "final_report_agent")
+
+        pdf_path = pdf_report.generate_pdf(state, job_id)
         with open(pdf_path, "rb") as fh:
             pdf_bytes = fh.read()
 
         _save_history_entry({
             "id": job_id,
             "company": company,
-            "recommendation": (merged.get("recommendation") or "WATCH").upper(),
+            "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "pdf_path": str(pdf_path),
         })
 
         with _JOBS_LOCK:
             _JOBS[job_id]["status"] = "complete"
-            _JOBS[job_id]["result"] = merged
+            _JOBS[job_id]["result"] = state
             _JOBS[job_id]["pdf_bytes"] = pdf_bytes
 
     except Exception as exc:
@@ -83,7 +91,6 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
             _JOBS[job_id]["error"] = str(exc)
 
     finally:
-        loop.close()
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 import streamlit as st
