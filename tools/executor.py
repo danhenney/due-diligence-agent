@@ -1,12 +1,12 @@
 """Tool routing and execution for agent tool calls."""
 from __future__ import annotations
 
-from tools import tavily_tools, edgar_tools, pdf_tools
+from tools import tavily_tools, edgar_tools, pdf_tools, yfinance_tools
 
 # Map tool name → executor module
 _TOOL_REGISTRY: dict[str, object] = {}
 
-for _mod in (tavily_tools, edgar_tools, pdf_tools):
+for _mod in (tavily_tools, edgar_tools, pdf_tools, yfinance_tools):
     # Each module exposes an execute_tool(name, inputs) function
     _TOOL_REGISTRY[_mod.__name__.split(".")[-1]] = _mod
 
@@ -20,6 +20,9 @@ def get_all_tools() -> list[dict]:
         edgar_tools.GET_COMPANY_FACTS_TOOL,
         pdf_tools.EXTRACT_PDF_TEXT_TOOL,
         pdf_tools.EXTRACT_PDF_TABLES_TOOL,
+        yfinance_tools.YF_GET_INFO_TOOL,
+        yfinance_tools.YF_GET_FINANCIALS_TOOL,
+        yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
     ]
 
 
@@ -28,6 +31,9 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
     tool_map = {
         # Phase 1
         "financial_analyst": [
+            yfinance_tools.YF_GET_INFO_TOOL,
+            yfinance_tools.YF_GET_FINANCIALS_TOOL,
+            yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
             edgar_tools.GET_SEC_FILINGS_TOOL,
             edgar_tools.GET_COMPANY_FACTS_TOOL,
             tavily_tools.WEB_SEARCH_TOOL,
@@ -55,6 +61,9 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "bull_case": [],        # reads state only — no live tools
         "bear_case": [],
         "valuation": [
+            yfinance_tools.YF_GET_INFO_TOOL,
+            yfinance_tools.YF_GET_FINANCIALS_TOOL,
+            yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
             tavily_tools.WEB_SEARCH_TOOL,
             edgar_tools.GET_SEC_FILINGS_TOOL,
         ],
@@ -83,4 +92,7 @@ def execute_tool_call(tool_name: str, tool_input: dict) -> str:
     # PDF tools
     if tool_name in ("extract_pdf_text", "extract_pdf_tables"):
         return pdf_tools.execute_tool(tool_name, tool_input)
+    # yfinance tools
+    if tool_name in ("yf_get_info", "yf_get_financials", "yf_get_analyst_data"):
+        return yfinance_tools.execute_tool(tool_name, tool_input)
     raise ValueError(f"Unknown tool: {tool_name}")
