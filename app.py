@@ -170,6 +170,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Password gate ─────────────────────────────────────────────────────────────
+_app_password = ""
+try:
+    _app_password = str(st.secrets.get("APP_PASSWORD", ""))
+except Exception:
+    pass
+
+if _app_password:
+    if not st.session_state.get("authenticated"):
+        st.markdown("## 📊 Due Diligence Agent")
+        st.divider()
+        pwd = st.text_input("Password", type="password", placeholder="Enter password to continue")
+        if st.button("Unlock", type="primary"):
+            if pwd == _app_password:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+        st.stop()
+
 # ── API key check ─────────────────────────────────────────────────────────────
 _missing = validate_config()
 if _missing:
