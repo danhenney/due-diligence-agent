@@ -180,6 +180,19 @@ NODE_LABELS = {
     "final_report_agent": "📝 Writing investment memo",
 }
 
+# Weighted % of total runtime each node typically consumes (must sum to 100)
+NODE_WEIGHTS = {
+    "input_processor":    2,
+    "phase1_parallel":    35,
+    "phase1_aggregator":  1,
+    "phase2_parallel":    28,
+    "phase2_aggregator":  1,
+    "fact_checker":       12,
+    "stress_test":        9,
+    "completeness":       6,
+    "final_report_agent": 6,
+}
+
 # ── Pipeline graphviz diagram ─────────────────────────────────────────────────
 PIPELINE_GRAPH = """
 digraph pipeline {
@@ -578,7 +591,8 @@ if st.session_state.phase == "form":
 
         with _JOBS_LOCK:
             _JOBS[job_id] = {"status": "running", "progress": [], "result": None,
-                             "pdf_bytes": None, "error": None}
+                             "pdf_bytes": None, "error": None,
+                             "start_time": time.time()}
 
         t = threading.Thread(
             target=_analysis_worker,
@@ -632,20 +646,47 @@ elif st.session_state.phase == "running":
         st.divider()
 
         progress = job.get("progress") or []
-        if progress:
-            for node in progress:
-                label = NODE_LABELS.get(node, node.replace("_", " ").title())
-                st.write(f"✓ {label}")
-            # Show a spinner for the next expected step
-            completed = set(progress)
-            for node in NODE_LABELS:
-                if node not in completed:
-                    with st.spinner(f"{NODE_LABELS[node]}…"):
-                        pass
-                    break
+        start_time = job.get("start_time") or time.time()
+        elapsed_sec = time.time() - start_time
+
+        # ── Progress calculation ───────────────────────────────────────────
+        completed_weight = sum(NODE_WEIGHTS.get(n, 0) for n in progress)
+        total_weight = sum(NODE_WEIGHTS.values())
+        pct = completed_weight / total_weight  # 0.0 → 1.0
+
+        # Elapsed + estimated remaining
+        def _fmt_time(seconds: float) -> str:
+            seconds = int(seconds)
+            if seconds < 60:
+                return f"{seconds}s"
+            return f"{seconds // 60}m {seconds % 60:02d}s"
+
+        elapsed_str = _fmt_time(elapsed_sec)
+        if pct > 0.02:
+            est_total = elapsed_sec / pct
+            remaining = max(0, est_total - elapsed_sec)
+            eta_str = f"~{_fmt_time(remaining)} remaining"
         else:
-            with st.spinner("Starting up…"):
-                pass
+            eta_str = "Estimating…"
+
+        # ── Progress bar + stats row ───────────────────────────────────────
+        steps_done = len(progress)
+        steps_total = len(NODE_LABELS)
+        st.progress(pct, text=f"**{int(pct * 100)}%** — step {steps_done} of {steps_total}  ·  elapsed {elapsed_str}  ·  {eta_str}")
+
+        st.markdown("")
+
+        # ── Completed steps ────────────────────────────────────────────────
+        for node in progress:
+            label = NODE_LABELS.get(node, node.replace("_", " ").title())
+            st.write(f"✓ {label}")
+
+        # ── Current step spinner ───────────────────────────────────────────
+        completed_set = set(progress)
+        for node in NODE_LABELS:
+            if node not in completed_set:
+                st.write(f"⏳ {NODE_LABELS[node]}…")
+                break
 
         # Poll every 3 seconds
         time.sleep(3)
