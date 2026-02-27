@@ -35,3 +35,4 @@ class DueDiligenceState(TypedDict):
     messages: Annotated[list, add_messages]
     errors: Annotated[list[str], operator.add]
     current_phase: str
+    language: str                         # "English" | "Korean"

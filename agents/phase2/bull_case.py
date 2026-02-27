@@ -56,6 +56,7 @@ def run(state: DueDiligenceState) -> dict:
         system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         tools=get_tools_for_agent("bull_case"),
+        language=state.get("language", "English"),
     )
 
     return {"bull_case": result}

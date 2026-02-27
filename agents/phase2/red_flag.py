@@ -66,6 +66,7 @@ def run(state: DueDiligenceState) -> dict:
         system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         tools=get_tools_for_agent("red_flag"),
+        language=state.get("language", "English"),
     )
 
     # Build the red_flags list[dict] for state from the full report

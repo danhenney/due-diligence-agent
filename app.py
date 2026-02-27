@@ -570,6 +570,12 @@ if st.session_state.phase == "form":
             "Website URL *(required — improves research quality)*",
             placeholder="https://example.com",
         )
+        language = st.radio(
+            "Report Language",
+            options=["English", "한국어"],
+            horizontal=True,
+            help="Choose the language for the entire analysis and investment memo.",
+        )
         uploaded_files = st.file_uploader(
             "Supporting Documents *(optional)*",
             type=["pdf"],
@@ -621,10 +627,15 @@ if st.session_state.phase == "form":
             doc_paths.append(dest)
 
         job_id = str(uuid.uuid4())
+        # Map display label to canonical language string
+        lang_map = {"English": "English", "한국어": "Korean"}
+        lang_value = lang_map.get(language, "English")
+
         initial_state = {
             "company_name": company.strip(),
             "company_url": url.strip(),
             "uploaded_docs": doc_paths,
+            "language": lang_value,
             "financial_report": None,
             "market_report": None,
             "legal_report": None,

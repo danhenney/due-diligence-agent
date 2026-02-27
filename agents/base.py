@@ -37,12 +37,20 @@ def run_agent(
     user_message: str,
     tools: list[dict],
     max_iterations: int = 10,
+    language: str = "English",
 ) -> dict[str, Any]:
     """Run an Anthropic agentic loop with tool use.
 
     Handles multi-turn tool calls automatically. Returns the final structured
     response parsed from the last assistant text block, or {"raw": text}.
     """
+    if language.lower() != "english":
+        system_prompt = (
+            system_prompt
+            + f"\n\nIMPORTANT: Write your ENTIRE response in {language}, "
+            + "including all analysis text and JSON field values. Do not use English."
+        )
+
     client = _get_client()
     messages: list[dict] = [{"role": "user", "content": user_message}]
 

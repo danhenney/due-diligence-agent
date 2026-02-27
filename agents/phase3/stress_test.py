@@ -83,6 +83,7 @@ def run(state: DueDiligenceState) -> dict:
         system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         tools=get_tools_for_agent("stress_test"),
+        language=state.get("language", "English"),
     )
 
     return {"stress_test": result}

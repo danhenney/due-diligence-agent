@@ -89,6 +89,7 @@ def run(state: DueDiligenceState) -> dict:
         user_message=user_message,
         tools=get_tools_for_agent("final_report"),
         max_iterations=5,
+        language=state.get("language", "English"),
     )
 
     # The result may be {"raw": "<full memo text>"} or parsed JSON
