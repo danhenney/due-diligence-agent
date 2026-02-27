@@ -1,6 +1,7 @@
 """LangGraph StateGraph construction for the due diligence pipeline."""
 from __future__ import annotations
 
+import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -54,11 +55,15 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
     merged: dict[str, Any] = {"current_phase": "phase1_done"}
     errors = []
 
+    # Stagger starts by 3 s to avoid all 5 agents hitting the API simultaneously
+    # and triggering rate-limit backoffs that stack.
+    future_to_name: dict = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_name = {
-            executor.submit(fn, state): name
-            for fn, name in zip(agent_fns, agent_names)
-        }
+        for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
+            if i > 0:
+                _time.sleep(3)
+            future_to_name[executor.submit(fn, state)] = name
+
         for future in as_completed(future_to_name):
             name = future_to_name[future]
             try:
@@ -87,11 +92,13 @@ def phase2_parallel(state: DueDiligenceState) -> dict:
     errors = []
     all_red_flags: list[dict] = list(state.get("red_flags") or [])
 
+    future_to_name: dict = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_name = {
-            executor.submit(fn, state): name
-            for fn, name in zip(agent_fns, agent_names)
-        }
+        for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
+            if i > 0:
+                _time.sleep(3)
+            future_to_name[executor.submit(fn, state)] = name
+
         for future in as_completed(future_to_name):
             name = future_to_name[future]
             try:
