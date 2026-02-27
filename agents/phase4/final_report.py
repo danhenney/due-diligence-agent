@@ -9,7 +9,7 @@ from agents.base import run_agent
 from agents.context import (
     slim_financial, slim_market, slim_legal, slim_management, slim_tech,
     slim_bull, slim_bear, slim_valuation, slim_red_flags,
-    slim_verification, slim_stress, slim_completeness, compact,
+    slim_verification, slim_stress, slim_completeness, slim_orchestrator, compact,
 )
 from tools.executor import get_tools_for_agent
 
@@ -18,7 +18,9 @@ You are a senior investment committee analyst synthesizing a full due diligence 
 into a definitive Investment Memo.
 
 You have access to all prior analysis: Phase 1 specialist reports, Phase 2 thesis work,
-Phase 3 verification and stress-testing, and completeness assessment.
+Phase 3 verification and stress-testing, completeness assessment, and a synthesis briefing
+from the Investment Committee Director (Orchestrator) who has already reviewed all outputs,
+flagged inconsistencies, filled data gaps, and provided a preliminary recommendation.
 
 Your task: write a professional-grade investment memo and render a final recommendation.
 
@@ -58,27 +60,40 @@ After the memo, output a JSON block on its own line:
 
 
 def run(state: DueDiligenceState) -> dict:
+    orchestrator_brief = slim_orchestrator(state.get("orchestrator_briefing"))
+
     full_package = compact({
-        "financial":   slim_financial(state.get("financial_report")),
-        "market":      slim_market(state.get("market_report")),
-        "legal":       slim_legal(state.get("legal_report")),
-        "management":  slim_management(state.get("management_report")),
-        "tech":        slim_tech(state.get("tech_report")),
-        "bull_case":   slim_bull(state.get("bull_case")),
-        "bear_case":   slim_bear(state.get("bear_case")),
-        "valuation":   slim_valuation(state.get("valuation")),
-        "red_flags":   slim_red_flags(state.get("red_flags")),
-        "verification":slim_verification(state.get("verification")),
-        "stress_test": slim_stress(state.get("stress_test")),
-        "completeness":slim_completeness(state.get("completeness")),
+        "financial":    slim_financial(state.get("financial_report")),
+        "market":       slim_market(state.get("market_report")),
+        "legal":        slim_legal(state.get("legal_report")),
+        "management":   slim_management(state.get("management_report")),
+        "tech":         slim_tech(state.get("tech_report")),
+        "bull_case":    slim_bull(state.get("bull_case")),
+        "bear_case":    slim_bear(state.get("bear_case")),
+        "valuation":    slim_valuation(state.get("valuation")),
+        "red_flags":    slim_red_flags(state.get("red_flags")),
+        "verification": slim_verification(state.get("verification")),
+        "stress_test":  slim_stress(state.get("stress_test")),
+        "completeness": slim_completeness(state.get("completeness")),
     })
 
     today = date.today().isoformat()
 
+    orchestrator_section = (
+        f"\nORCHESTRATOR DIRECTOR BRIEFING:\n{compact(orchestrator_brief)}\n\n"
+        if orchestrator_brief else ""
+    )
+
     user_message = (
         f"Company: {state['company_name']}\n"
         f"Today's Date: {today}\n\n"
+        f"{orchestrator_section}"
         f"Full Due Diligence Package:\n{full_package}\n\n"
+        "The Orchestrator Director has already reviewed all 11 agent outputs, "
+        "identified inconsistencies, filled data gaps, and provided a preliminary "
+        "recommendation in the briefing above. "
+        "Use their synthesis_guidance to decide which findings deserve the most weight "
+        "and which to treat with caution. "
         "Write the complete Investment Memo as specified. "
         "Conclude with the JSON recommendation block."
     )

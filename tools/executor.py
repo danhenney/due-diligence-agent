@@ -102,6 +102,15 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             tavily_tools.NEWS_SEARCH_TOOL,
         ],
         "completeness": [],
+        # Orchestrator — full tool set to fill gaps found across all agents
+        "orchestrator": [
+            yfinance_tools.YF_GET_INFO_TOOL,
+            yfinance_tools.YF_GET_FINANCIALS_TOOL,
+            yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
+            tavily_tools.WEB_SEARCH_TOOL,
+            tavily_tools.NEWS_SEARCH_TOOL,
+            edgar_tools.GET_SEC_FILINGS_TOOL,
+        ],
         # Phase 4
         "final_report": [],
     }

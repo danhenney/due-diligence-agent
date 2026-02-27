@@ -27,6 +27,9 @@ class DueDiligenceState(TypedDict):
     stress_test: dict | None
     completeness: dict | None
 
+    # ── Orchestrator — quality gate between Phase 3 and Phase 4 ───────────
+    orchestrator_briefing: dict | None
+
     # ── Phase 4 — final deliverable ────────────────────────────────────────
     final_report: str | None
     recommendation: str | None        # PASS / WATCH / INVEST

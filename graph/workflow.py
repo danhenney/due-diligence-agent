@@ -21,6 +21,7 @@ from agents.phase1 import (
 )
 from agents.phase2 import bull_case, bear_case, valuation, red_flag
 from agents.phase3 import fact_checker, stress_test, completeness
+from agents.orchestrator import orchestrator
 from agents.phase4 import final_report
 from agents.base import get_and_reset_usage
 
@@ -150,6 +151,10 @@ def completeness_node(state: DueDiligenceState) -> dict:
     return completeness.run(state)
 
 
+def orchestrator_node(state: DueDiligenceState) -> dict:
+    return orchestrator.run(state)
+
+
 def final_report_node(state: DueDiligenceState) -> dict:
     return final_report.run(state)
 
@@ -176,6 +181,7 @@ def build_graph(use_checkpointing: bool = True):
     builder.add_node("fact_checker", fact_checker_node)
     builder.add_node("stress_test", stress_test_node)
     builder.add_node("completeness", completeness_node)
+    builder.add_node("orchestrator", orchestrator_node)
     builder.add_node("final_report_agent", final_report_node)
 
     # Wire edges
@@ -187,7 +193,8 @@ def build_graph(use_checkpointing: bool = True):
     builder.add_edge("phase2_aggregator", "fact_checker")
     builder.add_edge("fact_checker", "stress_test")
     builder.add_edge("stress_test", "completeness")
-    builder.add_edge("completeness", "final_report_agent")
+    builder.add_edge("completeness", "orchestrator")
+    builder.add_edge("orchestrator", "final_report_agent")
     builder.add_edge("final_report_agent", END)
 
     if use_checkpointing:

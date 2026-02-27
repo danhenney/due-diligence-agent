@@ -96,6 +96,7 @@ _AGENT_LABELS_EN = {
     "fact_checker":      "Fact Checker",
     "stress_test":       "Stress Test",
     "completeness":      "Completeness",
+    "orchestrator":      "Orchestrator",
     "final_report_agent":"Final Report",
 }
 
@@ -112,6 +113,7 @@ _AGENT_LABELS_KO = {
     "fact_checker":      "팩트체커",
     "stress_test":       "스트레스 테스트 분석가",
     "completeness":      "완성도 검사기",
+    "orchestrator":      "오케스트레이터",
     "final_report_agent":"최종 보고서 에이전트",
 }
 
@@ -146,7 +148,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             input_processor, phase1_parallel, phase1_aggregator,
             phase2_parallel, phase2_aggregator,
             fact_checker_node, stress_test_node,
-            completeness_node, final_report_node,
+            completeness_node, orchestrator_node, final_report_node,
         )
 
         state: dict = dict(initial_state)
@@ -193,8 +195,9 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(phase2_aggregator, "phase2_aggregator")
         _step(fact_checker_node, "fact_checker")
         _step(stress_test_node,  "stress_test")
-        _step(completeness_node, "completeness")
-        _step(final_report_node, "final_report_agent")
+        _step(completeness_node,  "completeness")
+        _step(orchestrator_node,  "orchestrator")
+        _step(final_report_node,  "final_report_agent")
 
         pdf_path = pdf_report.generate_pdf(state, job_id)
 
@@ -383,6 +386,7 @@ _NODE_LABELS_EN = {
     "fact_checker":       "🔎 Fact-checking all claims",
     "stress_test":        "⚡ Stress-testing downside scenarios",
     "completeness":       "📋 Coverage & completeness review",
+    "orchestrator":       "🎯 Orchestrator — quality gate & gap fill",
     "final_report_agent": "📝 Writing investment memo",
 }
 
@@ -395,19 +399,21 @@ _NODE_LABELS_KO = {
     "fact_checker":       "🔎 모든 주장 팩트체크",
     "stress_test":        "⚡ 하방 시나리오 스트레스 테스트",
     "completeness":       "📋 커버리지 & 완성도 검토",
+    "orchestrator":       "🎯 오케스트레이터 — 품질 검토 & 데이터 보완",
     "final_report_agent": "📝 투자 메모 작성 중",
 }
 
 # Weighted % of total runtime each node typically consumes (must sum to 100)
 NODE_WEIGHTS = {
     "input_processor":    2,
-    "phase1_parallel":    35,
+    "phase1_parallel":    33,
     "phase1_aggregator":  1,
-    "phase2_parallel":    28,
+    "phase2_parallel":    26,
     "phase2_aggregator":  1,
-    "fact_checker":       12,
-    "stress_test":        9,
-    "completeness":       6,
+    "fact_checker":       11,
+    "stress_test":        8,
+    "completeness":       5,
+    "orchestrator":       7,
     "final_report_agent": 6,
 }
 
@@ -458,6 +464,12 @@ digraph pipeline {
         comp   [label="Complete-\nness" fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
     }
 
+    subgraph cluster_orch {
+        label="Orchestrator" fontsize=9 color="#059669"
+        fillcolor="#ecfdf5" style="rounded,filled";
+        orch [label="Quality Gate\n& Gap Fill" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"];
+    }
+
     final [label="Final\nReport" fillcolor="#d1fae5" color="#059669" fontcolor="#064e3b"];
 
     START -> inp;
@@ -468,7 +480,8 @@ digraph pipeline {
     agg2 -> fact;
     fact -> stress [label="  then  " fontsize=7 color="#d97706"];
     stress -> comp [label="  then  " fontsize=7 color="#d97706"];
-    comp -> final;
+    comp -> orch [label="  review  " fontsize=7 color="#059669"];
+    orch -> final;
     final -> END;
 }
 """
@@ -656,23 +669,36 @@ AGENT_PHASES = [
         ],
     },
     {
-        "label": "Phase 4 — Investment Memo",
+        "label": "Phase 4 — Final Synthesis",
         "color": "#059669",
         "bg": "#f0fdf4",
-        "description": "One final agent reads the **entire DD package** and writes a professional investment memo with a definitive INVEST / WATCH / PASS recommendation.",
+        "description": "The **Orchestrator** reviews all 11 prior agents, scores quality, fills gaps, and flags inconsistencies. The **Final Report Agent** then writes the investment memo guided by the Orchestrator's briefing.",
         "agents": [
+            {
+                "icon": "🎯",
+                "name": "Orchestrator",
+                "role": "Investment Committee Director — quality gate, gap filler, and synthesis guide.",
+                "methodology": [
+                    "Scores each of the 11 prior agents on output quality (0.0–1.0) and identifies their key data gaps",
+                    "Flags cross-agent inconsistencies (e.g. bull case projections not supported by financial data)",
+                    "Uses live tools (yfinance, web search, news) to fill the 3–5 most critical data gaps",
+                    "Identifies which findings are most reliable and which to treat with caution",
+                    "Renders a preliminary investment recommendation that guides the Final Report agent",
+                ],
+                "sources": ["All 11 prior agent outputs", "Yahoo Finance (yfinance — live verification)", "Web search", "News search", "SEC EDGAR"],
+            },
             {
                 "icon": "📝",
                 "name": "Final Report Agent",
-                "role": "Synthesizes all 12 prior agents into a structured investment memo.",
+                "role": "Synthesizes all prior agents + Orchestrator briefing into the investment memo.",
                 "methodology": [
-                    "Reads all Phase 1-3 outputs holistically",
+                    "Reads all Phase 1–3 outputs AND the Orchestrator's synthesis briefing",
                     "Weighs bull case vs. bear case vs. verified facts vs. stress scenarios",
+                    "Applies Orchestrator guidance on which findings to emphasize or discount",
                     "Writes a full Markdown investment memo (Executive Summary → Recommendation Rationale)",
                     "Issues **INVEST** (compelling upside, manageable risks), **WATCH** (interesting but uncertain), or **PASS** (risks outweigh opportunity)",
-                    "Memo sections: Executive Summary, Thesis, Financials, Market, Management, Tech, Legal, Valuation, Stress Tests, Fact-Check, Recommendation",
                 ],
-                "sources": ["All 12 prior agent outputs (full DD package)"],
+                "sources": ["All 12 prior agent outputs + Orchestrator briefing"],
             },
         ],
     },
@@ -717,10 +743,11 @@ def _get_agent_phases(lang: str) -> list:
             ],
         },
         {
-            "label": "4단계 — 투자 메모",
-            "description": "마지막 에이전트가 **전체 DD 패키지**를 읽고 INVEST / WATCH / PASS 결정을 담은 전문 투자 메모를 작성합니다.",
+            "label": "4단계 — 최종 종합",
+            "description": "**오케스트레이터**가 11개 에이전트 결과를 검토하고 품질 점수, 갭 보완, 불일치 플래그를 처리합니다. **최종 보고서 에이전트**는 오케스트레이터의 브리핑을 토대로 투자 메모를 작성합니다.",
             "agents": [
-                ("📝", "최종 보고서 에이전트", "12개 에이전트의 결과를 종합하여 구조화된 투자 메모를 작성합니다."),
+                ("🎯", "오케스트레이터", "투자위원회 디렉터 — 품질 검토, 데이터 갭 보완, 종합 가이드 제공"),
+                ("📝", "최종 보고서 에이전트", "11개 에이전트 결과 + 오케스트레이터 브리핑을 종합하여 투자 메모를 작성합니다."),
             ],
         },
     ]
@@ -998,6 +1025,7 @@ if st.session_state.phase == "form":
             "verification": None,
             "stress_test": None,
             "completeness": None,
+            "orchestrator_briefing": None,
             "final_report": None,
             "recommendation": None,
             "messages": [],

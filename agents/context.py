@@ -81,6 +81,15 @@ def slim_completeness(r: Any) -> dict:
                  "decision_readiness", "overall_completeness_score")
 
 
+# ── Orchestrator slim helper ───────────────────────────────────────────────────
+
+def slim_orchestrator(r: Any) -> dict:
+    return _pick(r, "cross_agent_inconsistencies", "critical_gaps_filled",
+                 "overall_data_quality", "synthesis_guidance",
+                 "orchestrator_recommendation", "recommendation_rationale",
+                 "confidence_score")
+
+
 # ── Serializer ─────────────────────────────────────────────────────────────────
 
 def compact(data: Any) -> str:
