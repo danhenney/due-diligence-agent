@@ -9,7 +9,7 @@ import streamlit as st
 # Inject Streamlit Cloud secrets into os.environ so config.py's os.getenv() works.
 # This is a no-op when running locally with a .env file.
 try:
-    for _k in ["GROQ_API_KEY", "TAVILY_API_KEY", "EDGAR_USER_AGENT"]:
+    for _k in ["ANTHROPIC_API_KEY", "TAVILY_API_KEY", "EDGAR_USER_AGENT"]:
         if _k in st.secrets and not os.environ.get(_k):
             os.environ[_k] = str(st.secrets[_k])
 except Exception:

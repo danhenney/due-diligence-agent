@@ -1,55 +1,22 @@
-"""Base agent using Groq (Llama 3.3 70B) with tool use and rate-limit retry."""
+"""Base agent using Anthropic Claude with tool use."""
 from __future__ import annotations
 
 import json
-import time
 from typing import Any
 
-from groq import Groq
+import anthropic
 
-from config import GROQ_API_KEY, MODEL_NAME, MAX_TOKENS
+from config import ANTHROPIC_API_KEY, MODEL_NAME, MAX_TOKENS
 from tools.executor import execute_tool_call
 
-_client: Groq | None = None
+_client: anthropic.Anthropic | None = None
 
 
-def _get_client() -> Groq:
+def _get_client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = Groq(api_key=GROQ_API_KEY)
+        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     return _client
-
-
-def _to_groq_tools(anthropic_tools: list[dict]) -> list[dict] | None:
-    """Convert Anthropic tool format → Groq/OpenAI function-calling format."""
-    if not anthropic_tools:
-        return None
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
-            },
-        }
-        for t in anthropic_tools
-    ]
-
-
-def _call_with_retry(client: Groq, max_retries: int = 6, **kwargs) -> Any:
-    """Call chat.completions.create with exponential backoff on 429s."""
-    for attempt in range(max_retries):
-        try:
-            return client.chat.completions.create(**kwargs)
-        except Exception as exc:
-            msg = str(exc)
-            if "429" in msg or "rate" in msg.lower() or "quota" in msg.lower():
-                wait = min(60, 5 * (2 ** attempt))  # 5 10 20 40 60 60 …
-                time.sleep(wait)
-            else:
-                raise
-    return client.chat.completions.create(**kwargs)
 
 
 def run_agent(
@@ -59,74 +26,61 @@ def run_agent(
     tools: list[dict],
     max_iterations: int = 10,
 ) -> dict[str, Any]:
-    """Run a Groq agentic loop with tool use.
+    """Run an Anthropic agentic loop with tool use.
 
-    Drop-in replacement for the original Anthropic-based interface —
-    all agent files remain unchanged.
+    Handles multi-turn tool calls automatically. Returns the final structured
+    response parsed from the last assistant text block, or {"raw": text}.
     """
     client = _get_client()
-    groq_tools = _to_groq_tools(tools)
-
-    messages: list[dict] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": user_message},
-    ]
-
-    final_text = ""
+    messages: list[dict] = [{"role": "user", "content": user_message}]
 
     for _ in range(max_iterations):
         kwargs: dict[str, Any] = {
             "model":      MODEL_NAME,
             "max_tokens": MAX_TOKENS,
+            "system":     system_prompt,
             "messages":   messages,
         }
-        if groq_tools:
-            kwargs["tools"]       = groq_tools
-            kwargs["tool_choice"] = "auto"
+        if tools:
+            kwargs["tools"] = tools
 
-        response   = _call_with_retry(client, **kwargs)
-        msg        = response.choices[0].message
-        tool_calls = msg.tool_calls or []
-        final_text = msg.content or ""
+        response = client.messages.create(**kwargs)
 
-        # Append assistant turn (Groq needs explicit dict, not the SDK object)
-        messages.append({
-            "role":    "assistant",
-            "content": final_text,
-            "tool_calls": [
-                {
-                    "id":   tc.id,
-                    "type": "function",
-                    "function": {
-                        "name":      tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in tool_calls
-            ] if tool_calls else [],
-        })
+        tool_use_blocks = []
+        text_blocks = []
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_use_blocks.append(block)
+            elif block.type == "text":
+                text_blocks.append(block)
 
-        if not tool_calls:
-            break
+        messages.append({"role": "assistant", "content": response.content})
 
-        # Execute every tool call and append results
-        for tc in tool_calls:
-            try:
-                tool_input = json.loads(tc.function.arguments)
-                result = execute_tool_call(tc.function.name, tool_input)
-            except Exception as exc:
-                result = json.dumps({"error": str(exc)})
-            messages.append({
-                "role":         "tool",
-                "tool_call_id": tc.id,
-                "content":      result,
-            })
+        if tool_use_blocks:
+            tool_results = []
+            for tb in tool_use_blocks:
+                try:
+                    result = execute_tool_call(tb.name, tb.input)
+                except Exception as exc:
+                    result = json.dumps({"error": str(exc)})
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": tb.id,
+                    "content":     result,
+                })
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        final_text = "\n".join(b.text for b in text_blocks).strip()
+        break
+    else:
+        final_text = "Agent exceeded maximum iterations without completing."
 
     return _parse_json_response(final_text)
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:
-    """Extract the first JSON object from text, or return {"raw": text}."""
+    """Extract the first JSON object found in text, or return {"raw": text}."""
     cleaned = text
     if "```json" in text:
         start   = text.index("```json") + 7
