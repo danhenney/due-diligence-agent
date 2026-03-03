@@ -30,41 +30,41 @@ _PRICE_OUTPUT_PER_M = 15.00
 
 # Human-readable labels for each agent key
 _AGENT_LABELS_EN = {
-    "financial_analyst": "Financial Analyst",
-    "market_research":   "Market Research",
-    "legal_risk":        "Legal Risk",
-    "management_team":   "Management Team",
-    "tech_product":      "Tech & Product",
-    "bull_case":         "Bull Case",
-    "bear_case":         "Bear Case",
-    "valuation":         "Valuation",
-    "red_flag":          "Red Flag Hunter",
-    "fact_checker":      "Fact Checker",
-    "stress_test":       "Stress Test",
-    "completeness":      "Completeness",
-    "phase1_check":      "Phase 1 Check",
-    "phase2_check":      "Phase 2 Check",
-    "phase3_check":      "Phase 3 Check & Synthesis",
-    "final_report_agent":"Final Report",
+    "market_analysis":     "Market Analysis",
+    "competitor_analysis": "Competitor Analysis",
+    "financial_analysis":  "Financial Analysis",
+    "tech_analysis":       "Tech Analysis",
+    "legal_regulatory":    "Legal & Regulatory",
+    "team_analysis":       "Team Analysis",
+    "ra_synthesis":        "R&A Synthesis",
+    "risk_assessment":     "Risk Assessment",
+    "strategic_insight":   "Strategic Insight",
+    "review_agent":        "Review Agent",
+    "critique_agent":      "Critique Agent",
+    "selective_rerun":     "Selective Re-run",
+    "phase1_restart":      "Phase 1 Restart",
+    "dd_questions":        "DD Questions",
+    "report_structure":    "Report Structure",
+    "report_writer":       "Report Writer",
 }
 
 _AGENT_LABELS_KO = {
-    "financial_analyst": "재무 분석가",
-    "market_research":   "시장 리서처",
-    "legal_risk":        "법적 리스크 분석가",
-    "management_team":   "경영진 분석가",
-    "tech_product":      "기술·제품 분석가",
-    "bull_case":         "강세 논거 분석가",
-    "bear_case":         "약세 논거 분석가",
-    "valuation":         "밸류에이션 분석가",
-    "red_flag":          "위험 신호 탐지기",
-    "fact_checker":      "팩트체커",
-    "stress_test":       "스트레스 테스트 분석가",
-    "completeness":      "완성도 검사기",
-    "phase1_check":      "1단계 검토",
-    "phase2_check":      "2단계 검토",
-    "phase3_check":      "3단계 검토 & 종합",
-    "final_report_agent":"최종 보고서 에이전트",
+    "market_analysis":     "시장 분석",
+    "competitor_analysis": "경쟁사 분석",
+    "financial_analysis":  "재무 분석",
+    "tech_analysis":       "기술 분석",
+    "legal_regulatory":    "법률·규제 분석",
+    "team_analysis":       "팀 분석",
+    "ra_synthesis":        "R&A 종합",
+    "risk_assessment":     "리스크 평가",
+    "strategic_insight":   "전략적 인사이트",
+    "review_agent":        "검토 에이전트",
+    "critique_agent":      "비평 에이전트",
+    "selective_rerun":     "선택적 재실행",
+    "phase1_restart":      "1단계 재시작",
+    "dd_questions":        "DD 질문서",
+    "report_structure":    "보고서 구조",
+    "report_writer":       "보고서 작성자",
 }
 
 # Display order
@@ -90,25 +90,25 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
 
 
 def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
-    """Inner worker — runs all pipeline nodes and writes results to disk."""
+    """Inner worker — runs the full pipeline with feedback loop support."""
     try:
         import pdf_report
+        import pptx_report
         from agents.base import get_and_reset_usage
         from graph.workflow import (
             input_processor, phase1_parallel, phase1_aggregator,
-            phase1_check_node,
-            phase2_parallel, phase2_aggregator,
-            phase2_check_node,
-            fact_checker_node, stress_test_node,
-            completeness_node, phase3_check_node, final_report_node,
+            phase2_parallel, strategic_insight_node, phase2_aggregator,
+            review_agent_node, critique_agent_node, critique_router,
+            selective_rerun, phase1_restart,
+            dd_questions_node, report_structure_node, report_writer_node,
         )
 
         state: dict = dict(initial_state)
         progress: list[str] = []
-        token_usage: dict = {}   # agent_key -> {input_tokens, output_tokens, cost_usd}
+        token_usage: dict = {}
 
-        # Nodes that don't call the LLM (no cost to track)
-        _NO_LLM_NODES = {"input_processor", "phase1_aggregator", "phase2_aggregator"}
+        _NO_LLM_NODES = {"input_processor", "phase1_aggregator", "phase2_aggregator",
+                         "phase1_restart"}
 
         def _step(fn, node_name: str) -> None:
             result = fn(state)
@@ -116,8 +116,6 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             progress.append(node_name)
 
             if node_name in ("phase1_parallel", "phase2_parallel"):
-                # Per-sub-agent usage is captured inside workflow.py and
-                # returned in state["__agent_usage__"]
                 for agent_key, usage in (state.pop("__agent_usage__", {}) or {}).items():
                     token_usage[agent_key] = {
                         "input_tokens":  usage["input_tokens"],
@@ -125,10 +123,8 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                         "cost_usd":      _cost_usd(usage["input_tokens"], usage["output_tokens"]),
                     }
             elif node_name not in _NO_LLM_NODES:
-                # Sequential agent — usage is on this thread
                 usage = get_and_reset_usage()
-                agent_key = node_name
-                token_usage[agent_key] = {
+                token_usage[node_name] = {
                     "input_tokens":  usage["input_tokens"],
                     "output_tokens": usage["output_tokens"],
                     "cost_usd":      _cost_usd(usage["input_tokens"], usage["output_tokens"]),
@@ -139,23 +135,53 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 "token_usage": token_usage.copy(),
             })
 
-        _step(input_processor,   "input_processor")
-        _step(phase1_parallel,   "phase1_parallel")
-        _step(phase1_aggregator, "phase1_aggregator")
-        _step(phase1_check_node, "phase1_check")
-        _step(phase2_parallel,   "phase2_parallel")
-        _step(phase2_aggregator, "phase2_aggregator")
-        _step(phase2_check_node, "phase2_check")
-        _step(fact_checker_node, "fact_checker")
-        _step(stress_test_node,  "stress_test")
-        _step(completeness_node,  "completeness")
-        _step(phase3_check_node,  "phase3_check")
-        _step(final_report_node,  "final_report_agent")
+        # Main pipeline
+        _step(input_processor,        "input_processor")
+        _step(phase1_parallel,        "phase1_parallel")
+        _step(phase1_aggregator,      "phase1_aggregator")
+        _step(phase2_parallel,        "phase2_parallel")
+        _step(strategic_insight_node, "strategic_insight")
+        _step(phase2_aggregator,      "phase2_aggregator")
 
+        # Phase 3 with feedback loop
+        max_loops = 3  # safety cap
+        for _loop in range(max_loops):
+            _step(review_agent_node,   "review_agent")
+            _step(critique_agent_node, "critique_agent")
+
+            route = critique_router(state)
+            progress.append(f"critique_router:{route}")
+            update_job(job_id, {"progress": progress.copy()})
+
+            if route == "pass":
+                break
+            elif route == "conditional":
+                _step(selective_rerun, "selective_rerun")
+                # loop back to review_agent
+            elif route == "fail":
+                _step(phase1_restart, "phase1_restart")
+                _step(phase1_parallel, "phase1_parallel")
+                _step(phase1_aggregator, "phase1_aggregator")
+                _step(phase2_parallel, "phase2_parallel")
+                _step(strategic_insight_node, "strategic_insight")
+                _step(phase2_aggregator, "phase2_aggregator")
+                # loop back to review_agent
+
+        # Forward path
+        _step(dd_questions_node,      "dd_questions")
+        _step(report_structure_node,  "report_structure")
+        _step(report_writer_node,     "report_writer")
+
+        # Generate PDF
         pdf_path = pdf_report.generate_pdf(state, job_id, output_dir=tmp_dir)
-
-        # Upload PDF to Supabase Storage
         storage_path = upload_pdf(job_id, pdf_path)
+
+        # Generate PPTX
+        pptx_path = None
+        try:
+            pptx_path = pptx_report.generate_pptx(state, job_id, output_dir=tmp_dir)
+        except Exception:
+            pass  # PPTX is optional — don't fail the pipeline
 
         save_history_entry({
             "id": job_id,
@@ -165,13 +191,16 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             "pdf_path": storage_path,
         })
 
-        update_job(job_id, {
+        job_update = {
             "status":         "complete",
             "pdf_path":       storage_path,
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "final_report":   state.get("final_report") or "",
             "token_usage":    token_usage,
-        })
+        }
+        if pptx_path:
+            job_update["pptx_path"] = pptx_path
+        update_job(job_id, job_update)
 
     except Exception as exc:
         update_job(job_id, {"status": "error", "error": str(exc)})
@@ -387,17 +416,18 @@ _NODE_LABELS_KO = {
 # Weighted % of total runtime each node typically consumes (must sum to 100)
 NODE_WEIGHTS = {
     "input_processor":    2,
-    "phase1_parallel":    30,
+    "phase1_parallel":    36,
     "phase1_aggregator":  1,
-    "phase1_check":       4,
-    "phase2_parallel":    24,
+    "phase2_parallel":    14,
+    "strategic_insight":  8,
     "phase2_aggregator":  1,
-    "phase2_check":       4,
-    "fact_checker":       11,
-    "stress_test":        8,
-    "completeness":       4,
-    "phase3_check":       5,
-    "final_report_agent": 6,
+    "review_agent":       10,
+    "critique_agent":     4,
+    "selective_rerun":    6,
+    "phase1_restart":     1,
+    "dd_questions":       4,
+    "report_structure":   4,
+    "report_writer":      9,
 }
 
 # ── Pipeline graphviz diagram ─────────────────────────────────────────────────
@@ -415,61 +445,59 @@ digraph pipeline {
     inp [label="Input\nProcessor" fillcolor="#e0e7ff" color="#6366f1" fontcolor="#3730a3"];
 
     subgraph cluster_p1 {
-        label="Phase 1  —  Parallel" fontsize=9 color="#2563eb"
+        label="Phase 1  —  Parallel (6 agents)" fontsize=9 color="#2563eb"
         fillcolor="#eff6ff" style="rounded,filled";
-        fin  [label="Financial\nAnalyst"  fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
-        mkt  [label="Market\nResearch"   fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
-        leg  [label="Legal Risk"         fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
-        mgmt [label="Management\nTeam"   fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
-        tech [label="Tech &\nProduct"    fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        mkt  [label="Market\nAnalysis"   fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        comp [label="Competitor\nAnalysis" fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        fin  [label="Financial\nAnalysis"  fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        tec  [label="Tech\nAnalysis"      fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        leg  [label="Legal &\nRegulatory" fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        team [label="Team\nAnalysis"      fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
     }
-
-    orch1 [label="Orchestrator\nCheck" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
-           shape=octagon fontsize=8];
 
     subgraph cluster_p2 {
-        label="Phase 2  —  Parallel" fontsize=9 color="#7c3aed"
+        label="Phase 2  —  Synthesis" fontsize=9 color="#7c3aed"
         fillcolor="#f5f3ff" style="rounded,filled";
-        bull [label="Bull Case"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
-        bear [label="Bear Case"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
-        val  [label="Valuation"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
-        red  [label="Red Flags"  fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
+        ras  [label="R&A\nSynthesis" fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
+        risk [label="Risk\nAssessment" fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
+        si   [label="Strategic\nInsight" fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
     }
-
-    orch2 [label="Orchestrator\nCheck" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
-           shape=octagon fontsize=8];
 
     subgraph cluster_p3 {
-        label="Phase 3  —  Sequential" fontsize=9 color="#d97706"
+        label="Phase 3  —  Review & Critique" fontsize=9 color="#d97706"
         fillcolor="#fffbeb" style="rounded,filled";
-        fact   [label="Fact\nChecker"  fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
-        stress [label="Stress\nTest"   fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
-        comp   [label="Complete-\nness" fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
+        rev  [label="Review\nAgent"    fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
+        crit [label="Critique\nAgent"  fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
+        ddq  [label="DD\nQuestions"    fillcolor="#fde68a" color="#b45309" fontcolor="#78350f"];
     }
 
-    orch3 [label="Orchestrator\nCheck &\nSynthesis" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
-           shape=octagon fontsize=8];
+    router [label="Critique\nRouter" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
+            shape=diamond fontsize=8];
 
-    final [label="Final\nReport" fillcolor="#d1fae5" color="#059669" fontcolor="#064e3b"];
+    subgraph cluster_p4 {
+        label="Phase 4  —  Report" fontsize=9 color="#1e40af"
+        fillcolor="#eff6ff" style="rounded,filled";
+        rstr [label="Report\nStructure" fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+        rwrt [label="Report\nWriter"    fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
+    }
 
     START -> inp;
-    inp -> fin; inp -> mkt; inp -> leg; inp -> mgmt; inp -> tech;
-    fin -> orch1; mkt -> orch1; leg -> orch1; mgmt -> orch1; tech -> orch1;
-    orch1 -> bull [label=" pass " fontsize=7 color="#059669"];
-    orch1 -> bear; orch1 -> val; orch1 -> red;
-    bull -> orch2; bear -> orch2; val -> orch2; red -> orch2;
-    orch2 -> fact [label=" pass " fontsize=7 color="#059669"];
-    fact -> stress [label="  then  " fontsize=7 color="#d97706"];
-    stress -> comp [label="  then  " fontsize=7 color="#d97706"];
-    comp -> orch3;
-    orch3 -> final [label=" pass " fontsize=7 color="#059669"];
-    final -> END;
+    inp -> mkt; inp -> comp; inp -> fin; inp -> tec; inp -> leg; inp -> team;
+    mkt -> ras; comp -> ras; fin -> ras; tec -> ras; leg -> ras; team -> ras;
+    mkt -> risk; comp -> risk; fin -> risk; tec -> risk; leg -> risk; team -> risk;
+    ras -> si; risk -> si;
+    si -> rev;
+    rev -> crit;
+    crit -> router;
+    router -> ddq [label=" pass " fontsize=7 color="#059669"];
+    ddq -> rstr;
+    rstr -> rwrt;
+    rwrt -> END;
 
-    // Revision feedback edges (dashed)
+    // Feedback loop edges (dashed)
     edge [style=dashed color="#dc2626" arrowsize=0.5];
-    orch1 -> fin  [label="revise" fontsize=6 color="#dc2626"];
-    orch2 -> bull [label="revise" fontsize=6 color="#dc2626"];
-    orch3 -> fact [label="revise" fontsize=6 color="#dc2626"];
+    router -> rev  [label="conditional\n(selective rerun)" fontsize=6 color="#dc2626"];
+    router -> mkt  [label="fail\n(full restart)" fontsize=6 color="#dc2626"];
 }
 """
 
@@ -479,245 +507,210 @@ AGENT_PHASES = [
         "label": "Phase 1 — Parallel Research",
         "color": "#1d4ed8",
         "bg": "#eff6ff",
-        "description": "5 specialist agents run **simultaneously**. Each independently researches a different dimension of the company. None waits for the others.",
+        "description": "6 specialist agents run **simultaneously**. Each independently researches a different dimension of the company.",
         "agents": [
             {
-                "icon": "💰",
-                "name": "Financial Analyst",
-                "role": "Assesses financial health, profitability, and accounting quality.",
-                "methodology": [
-                    "Pulls SEC 10-K / 10-Q filings from EDGAR",
-                    "Calculates key ratios: gross margin, EBITDA margin, D/E ratio, current ratio",
-                    "Trends revenue, operating income, free cash flow year-over-year",
-                    "Checks for revenue concentration risk and accounting red flags",
-                    "Compares metrics against industry benchmarks",
-                ],
-                "sources": ["SEC EDGAR (10-K, 10-Q, 8-K)", "Yahoo Finance (yfinance)", "Web search", "Uploaded PDFs"],
-            },
-            {
                 "icon": "🌍",
-                "name": "Market Research",
-                "role": "Estimates TAM/SAM, maps the competitive landscape, and identifies macro trends.",
+                "name": "Market Analysis",
+                "role": "TAM/SAM/SOM for ALL markets, CAGR, trends, and market drivers.",
                 "methodology": [
-                    "Estimates Total Addressable Market (TAM) and Serviceable Market (SAM)",
-                    "Maps direct competitors, indirect substitutes, and market share",
-                    "Identifies macro tailwinds/headwinds (regulation, demographics, tech shifts)",
-                    "Evaluates company positioning and differentiation vs. rivals",
-                    "Assesses barriers to entry and market defensibility",
+                    "Estimates TAM/SAM/SOM for each business line with specific dollar figures",
+                    "Calculates historical and projected 5-year CAGR",
+                    "Maps key market trends, drivers, and geographic breakdown",
+                    "Identifies macro tailwinds/headwinds and demand-side dynamics",
+                    "Cross-verifies all figures with 3+ sources",
                 ],
-                "sources": ["Web search", "News search", "Google Trends (pytrends)", "FRED macroeconomic data", "Industry reports"],
+                "sources": ["Web search", "News search", "Yahoo Finance", "Google Trends", "FRED macroeconomic data"],
             },
             {
-                "icon": "⚖️",
-                "name": "Legal Risk Analyst",
-                "role": "Surfaces litigation, regulatory exposure, IP risks, and governance issues.",
+                "icon": "🏢",
+                "name": "Competitor Analysis",
+                "role": "Competitor ID across all business lines, comparison matrix.",
                 "methodology": [
-                    "Searches for active lawsuits, class actions, and settlements",
-                    "Reviews regulatory compliance status and recent enforcement actions",
-                    "Assesses IP portfolio strength and patent disputes",
-                    "Evaluates data privacy posture (GDPR, CCPA) and ESG exposure",
-                    "Flags corporate governance red flags and insider conflicts",
+                    "Identifies direct and indirect competitors across all business lines",
+                    "Builds comparison matrix (product, pricing, financials, market share, talent)",
+                    "Analyzes market share trends and competitive positioning",
+                    "Assesses competitive gaps and pricing power dynamics",
+                    "Includes actual revenue/market cap for public competitors",
                 ],
-                "sources": ["Web search", "News search", "USPTO PatentsView (patent database)", "Uploaded PDFs (legal docs)"],
+                "sources": ["Web search", "News search", "Yahoo Finance", "Google Trends"],
             },
             {
-                "icon": "👥",
-                "name": "Management Team Analyst",
-                "role": "Evaluates founders, executives, board, and organizational maturity.",
+                "icon": "💰",
+                "name": "Financial Analysis",
+                "role": "5-year financials, ratios, cash flow + DCF/Market-based/Asset-based valuation.",
                 "methodology": [
-                    "Reviews founder/CEO background, domain expertise, and track record",
-                    "Assesses executive team completeness and prior startup experience",
-                    "Evaluates board composition (independence, relevant expertise)",
-                    "Identifies key-person dependency and succession risks",
-                    "Surfaces culture signals and employee sentiment (Glassdoor, press)",
+                    "Pulls live financial data: revenue, margins, balance sheet, cash flow",
+                    "Performs DCF with explicit WACC and terminal growth assumptions",
+                    "Runs market-based valuation (P/E, EV/EBITDA, P/S) with domestic + international comps",
+                    "Calculates fair value range (low/mid/high) with methodology",
+                    "Flags accounting red flags and revenue concentration risks",
                 ],
-                "sources": ["Web search", "News search", "LinkedIn (via web)"],
+                "sources": ["Yahoo Finance (yfinance)", "SEC EDGAR (10-K, 10-Q)", "Web search", "Uploaded PDFs"],
             },
             {
                 "icon": "🔬",
-                "name": "Tech & Product Analyst",
-                "role": "Evaluates product maturity, technical moat, scalability, and PMF.",
+                "name": "Tech Analysis",
+                "role": "Core tech inventory, IP/patents, tech maturity vs. competitors.",
                 "methodology": [
-                    "Assesses product stage (MVP / growth / mature) and feature depth",
-                    "Evaluates technical differentiation and defensibility (IP, data moats)",
-                    "Reviews scalability architecture and infrastructure choices",
-                    "Measures product-market fit signals (NPS, churn, retention)",
-                    "Benchmarks engineering team size and development velocity",
+                    "Inventories core technologies powering each business line",
+                    "Assesses IP and patent portfolio (count, key patents, pending)",
+                    "Evaluates tech maturity and moat strength vs. competitors",
+                    "Reviews R&D investment levels and engineering capacity",
+                    "Translates technical details into investor-friendly language",
                 ],
-                "sources": ["Web search", "News search", "GitHub API (repos, commit activity, contributors)", "Google Trends (pytrends)", "USPTO PatentsView"],
+                "sources": ["Web search", "News search", "GitHub API", "USPTO PatentsView"],
+            },
+            {
+                "icon": "⚖️",
+                "name": "Legal & Regulatory",
+                "role": "Investment structure risks + business regulatory risks.",
+                "methodology": [
+                    "Evaluates investment structure risks (fund carry, exit, reputation)",
+                    "Reviews business regulatory compliance across jurisdictions",
+                    "Searches for active litigation, settlements, and enforcement actions",
+                    "Assesses IP risks, data privacy posture, and ESG exposure",
+                    "Flags corporate governance issues and related-party transactions",
+                ],
+                "sources": ["Web search", "News search", "USPTO PatentsView", "Uploaded PDFs"],
+            },
+            {
+                "icon": "👥",
+                "name": "Team Analysis",
+                "role": "Leadership profiles, capability analysis, departure history.",
+                "methodology": [
+                    "Profiles CEO/founder, C-suite, and key executives",
+                    "Assesses team capabilities vs. next growth phase requirements",
+                    "Reviews departure history and succession planning",
+                    "Evaluates board composition and advisory quality",
+                    "Surfaces culture signals from Glassdoor, press, and social media",
+                ],
+                "sources": ["Web search", "News search", "LinkedIn (via web)"],
             },
         ],
     },
     {
-        "label": "Phase 2 — Parallel Analysis",
+        "label": "Phase 2 — Synthesis",
         "color": "#7c3aed",
         "bg": "#f5f3ff",
-        "description": "4 thesis agents run **simultaneously**, each reading all Phase 1 reports. They argue different angles to stress-test the opportunity from every direction.",
+        "description": "R&A Synthesis + Risk Assessment run **in parallel**, then Strategic Insight runs **sequentially** (needs both).",
         "agents": [
             {
-                "icon": "📈",
-                "name": "Bull Case Analyst",
-                "role": "Builds the strongest possible investment thesis and quantifies upside.",
+                "icon": "📊",
+                "name": "R&A Synthesis",
+                "role": "Synthesizes Phase 1 into 3-5 core investment arguments + CDD/LDD/FDD scorecard.",
                 "methodology": [
-                    "Synthesizes Phase 1 findings to construct the best-case scenario",
-                    "Identifies top catalysts (product launches, market expansion, M&A)",
-                    "Assigns probability weights and timelines to each catalyst",
-                    "Projects revenue trajectory and valuation upside in bull scenario",
-                    "Articulates competitive advantages and why the company can win",
+                    "Distills 6 reports into 3-5 core investment arguments ranked by conviction",
+                    "Builds attractiveness scorecard: CDD, LDD, FDD (each 1-10)",
+                    "Checks cross-report consistency and flags contradictions",
+                    "Identifies key findings and information gaps",
                 ],
-                "sources": ["Phase 1 reports (financial, market, legal, management, tech)"],
+                "sources": ["All Phase 1 reports", "Web search", "Yahoo Finance"],
             },
             {
-                "icon": "📉",
-                "name": "Bear Case Analyst",
-                "role": "Constructs the strongest argument against investing and identifies fatal flaws.",
+                "icon": "⚠️",
+                "name": "Risk Assessment",
+                "role": "ALL risks with probability/impact/severity matrix + mitigation strategies.",
                 "methodology": [
-                    "Stress-tests Phase 1 findings for weaknesses and inconsistencies",
-                    "Assigns realistic likelihood and severity scores to each risk",
-                    "Models worst-case scenario with quantified revenue/valuation impact",
-                    "Identifies structural weaknesses that competitors could exploit",
-                    "Flags management and financial concerns that may be deal-breakers",
+                    "Identifies risks across 6 categories: legal, business, financial, reputation, tech, operational",
+                    "Scores each risk: probability (1-5) × impact (1-5) = severity",
+                    "Proposes specific mitigation strategies with feasibility rating",
+                    "Determines overall risk level and risk-adjusted assessment",
                 ],
-                "sources": ["Phase 1 reports (financial, market, legal, management, tech)"],
+                "sources": ["All Phase 1 reports", "Web search", "News search"],
             },
             {
-                "icon": "🧮",
-                "name": "Valuation Analyst",
-                "role": "Estimates fair value using DCF, revenue multiples, and precedent transactions.",
+                "icon": "🎯",
+                "name": "Strategic Insight",
+                "role": "INVEST/WATCH/PASS decision + detailed rationale + synergy analysis.",
                 "methodology": [
-                    "Runs revenue/EBITDA multiple analysis vs. comparable public companies",
-                    "Builds DCF model with bull/base/bear assumptions",
-                    "Reviews precedent M&A transactions in the sector",
-                    "Produces a fair value range (low / mid / high) with confidence intervals",
-                    "Calculates implied upside/downside to current valuation",
+                    "Renders preliminary investment recommendation with detailed rationale",
+                    "Analyzes portfolio fit and strategic synergies",
+                    "Identifies key conditions that would change the recommendation",
+                    "Outlines investment timeline and exit strategy considerations",
+                    "Anti-bias: does NOT default to WATCH — decisive recommendation required",
                 ],
-                "sources": ["Yahoo Finance (yfinance — live multiples, analyst targets)", "Web search", "Phase 1 financial & market reports"],
-            },
-            {
-                "icon": "🚩",
-                "name": "Red Flag Hunter",
-                "role": "Cross-examines all Phase 1 reports for contradictions, omissions, and fraud signals.",
-                "methodology": [
-                    "Compares claims across all 5 Phase 1 reports for inconsistencies",
-                    "Detects classic fraud signals: revenue ≠ cash flow, customer concentration",
-                    "Identifies suspicious omissions and missing critical information",
-                    "Flags related-party transactions and unusual accounting treatments",
-                    "Rates each flag by severity (high / medium / low) with evidence",
-                ],
-                "sources": ["Phase 1 reports (cross-referenced against each other)"],
+                "sources": ["All Phase 1 + Phase 2 reports", "Web search", "Yahoo Finance"],
             },
         ],
     },
     {
-        "label": "Phase 3 — Sequential Verification",
+        "label": "Phase 3 — Review & Critique",
         "color": "#b45309",
         "bg": "#fffbeb",
-        "description": "3 QA agents run **one after another** — each depends on the previous one's output. Order matters: verify facts first, then stress-test, then check for gaps.",
+        "description": "Sequential: **Review** (verify claims) → **Critique** (score 5 criteria) → **DD Questions**. The Critique agent triggers a **feedback loop** if quality is insufficient (max 2 iterations).",
         "agents": [
             {
                 "icon": "🔎",
-                "name": "Fact Checker",
-                "role": "Independently verifies every material claim made in Phases 1 & 2.",
+                "name": "Review Agent",
+                "role": "Source verification, quantitative accuracy, logical consistency.",
                 "methodology": [
-                    "Extracts all material factual claims from Phase 1 & 2 reports",
-                    "Independently searches for primary sources to confirm or refute each claim",
-                    "Classifies each as: VERIFIED / UNVERIFIED / CONTRADICTED / MISSING",
-                    "Assigns a confidence score and cites the verification source",
-                    "Outputs overall factual integrity score for the entire DD package",
+                    "Verifies material claims using live tool calls",
+                    "Checks quantitative accuracy of financial figures and market sizes",
+                    "Assesses qualitative backing and logical consistency",
+                    "Identifies stale data and cross-report inconsistencies",
+                    "Classifies claims as VERIFIED / UNVERIFIED / CONTRADICTED / STALE",
                 ],
-                "sources": ["Web search", "News search", "Phase 1 & 2 reports"],
-            },
-            {
-                "icon": "⚡",
-                "name": "Stress Test Analyst",
-                "role": "Models three downside scenarios with quantified financial impact.",
-                "methodology": [
-                    "**Base Stress**: Moderate deterioration (mild recession, execution miss)",
-                    "**Severe Stress**: Major adverse event (big competitor, regulatory action)",
-                    "**Catastrophic**: Existential risk (fraud, bankruptcy, tech disruption)",
-                    "Estimates probability, revenue impact, valuation impact per scenario",
-                    "Assesses recovery likelihood and investment implications for each",
-                ],
-                "sources": ["Phase 1-2 reports", "Bear case", "Red flags", "Fact-check output"],
+                "sources": ["Web search", "News search", "Yahoo Finance"],
             },
             {
                 "icon": "📋",
-                "name": "Completeness Checker",
-                "role": "QA audit — identifies coverage gaps and rates decision readiness.",
+                "name": "Critique Agent",
+                "role": "Scores 5 criteria (1-10): Logic, Completeness, Accuracy, Narrative Bias, Insight Effectiveness.",
                 "methodology": [
-                    "Scores coverage across 7 dimensions (0-1): financial, market, legal, management, tech, valuation, risk",
-                    "Identifies specific gaps that could affect the investment decision",
-                    "Flags information quality issues (low confidence, unverified claims)",
-                    "Recommends additional diligence items with priority ranking",
-                    "Issues a verdict: READY / NEEDS MORE WORK / INSUFFICIENT",
+                    "Scores Logic (1-10): Are investment arguments logically sound?",
+                    "Scores Completeness (1-10): Does the analysis cover all material dimensions?",
+                    "Scores Accuracy (1-10): Are facts and figures correct and current?",
+                    "Scores Narrative Bias (1-10): Is the analysis balanced and objective?",
+                    "Scores Insight Effectiveness (1-10): Does it provide actionable insights?",
+                    "Total >= 35 AND all >= 7: PASS | < 30 or 3+ items < 5: FAIL | Otherwise: CONDITIONAL (selective rerun)",
                 ],
-                "sources": ["All prior Phase 1, 2, and Phase 3 outputs"],
+                "sources": ["All prior agent outputs (no tools — pure evaluation)"],
+            },
+            {
+                "icon": "❓",
+                "name": "DD Questions",
+                "role": "Unresolved issues list + structured DD Questionnaire.",
+                "methodology": [
+                    "Lists all unresolved issues remaining after analysis",
+                    "Creates structured DD Questionnaire with target, priority, and expected scenarios",
+                    "Recommends next steps for the investment team",
+                    "Only runs after critique passes quality threshold",
+                ],
+                "sources": ["All prior agent outputs (no tools)"],
             },
         ],
     },
     {
-        "label": "Orchestrator — Quality Gates",
-        "color": "#059669",
-        "bg": "#ecfdf5",
-        "description": "The **Orchestrator** runs after **each phase**, not just at the end. It scores every agent's output, revises weak ones (score < 0.65), and only passes to the next phase when quality is sufficient. After Phase 3, it also performs a full synthesis with live tools.",
-        "agents": [
-            {
-                "icon": "🎯",
-                "name": "Phase 1 Check",
-                "role": "Evaluates all 5 Phase 1 agents. Revises weak ones before Phase 2 begins.",
-                "methodology": [
-                    "Scores each Phase 1 agent (0.0–1.0) based on depth, sourcing, and completeness",
-                    "Agents scoring below 0.65 are flagged for revision with specific actionable feedback",
-                    "Re-runs up to 3 weak agents with targeted revision briefs (worst first)",
-                    "Only passes to Phase 2 once quality threshold is met",
-                ],
-                "sources": ["Phase 1 agent outputs (financial, market, legal, management, tech)"],
-            },
-            {
-                "icon": "🎯",
-                "name": "Phase 2 Check",
-                "role": "Evaluates all 4 Phase 2 agents. Revises weak ones before Phase 3 begins.",
-                "methodology": [
-                    "Scores each Phase 2 agent (0.0–1.0) on analytical rigor and evidence quality",
-                    "Agents scoring below 0.65 are flagged for revision with specific actionable feedback",
-                    "Re-runs up to 3 weak agents with targeted revision briefs (worst first)",
-                    "Only passes to Phase 3 once quality threshold is met",
-                ],
-                "sources": ["Phase 2 agent outputs (bull case, bear case, valuation, red flags)"],
-            },
-            {
-                "icon": "🎯",
-                "name": "Phase 3 Check & Synthesis",
-                "role": "Evaluates Phase 3 agents, then synthesizes all 11 outputs into a briefing with live data.",
-                "methodology": [
-                    "Scores Phase 3 agents and revises weak ones (same process as Phase 1 & 2 checks)",
-                    "Uses live tools (yfinance, web search, news) to fill remaining critical data gaps",
-                    "Flags cross-agent inconsistencies and resolves contradictions",
-                    "Identifies most vs. least reliable findings across all 11 agents",
-                    "Renders a preliminary investment recommendation (INVEST / WATCH / PASS) for the Final Report",
-                ],
-                "sources": ["All 11 prior agent outputs", "Yahoo Finance (live verification)", "Web search", "News search"],
-            },
-        ],
-    },
-    {
-        "label": "Phase 4 — Investment Memo",
+        "label": "Phase 4 — Report",
         "color": "#1e40af",
         "bg": "#eff6ff",
-        "description": "The **Final Report Agent** writes the complete investment memo, guided by the Orchestrator's synthesis briefing and all prior agent outputs.",
+        "description": "**Report Structure** designs the Why/What/How/Risk/Recommendations framework, then **Report Writer** produces the final polished memo.",
         "agents": [
             {
-                "icon": "📝",
-                "name": "Final Report Agent",
-                "role": "Synthesizes all prior agents + Orchestrator briefing into the investment memo.",
+                "icon": "📐",
+                "name": "Report Structure",
+                "role": "Designs Why/What/How/Risk/Recommendations TOC with 20-30 page target.",
                 "methodology": [
-                    "Reads all Phase 1–3 outputs AND the Orchestrator's synthesis briefing",
-                    "Weighs bull case vs. bear case vs. verified facts vs. stress scenarios",
-                    "Applies Orchestrator guidance on which findings to emphasize or discount",
-                    "Writes a full Markdown investment memo (Executive Summary → Recommendation Rationale)",
-                    "Issues **INVEST** (compelling upside, manageable risks), **WATCH** (interesting but uncertain), or **PASS** (risks outweigh opportunity)",
+                    "Designs report following Why/What/How/Risk/Recommendations framework",
+                    "Specifies data sources and key data points for each section",
+                    "Sets target page counts and narrative arcs",
+                    "Outlines executive summary and appendix sections",
                 ],
-                "sources": ["All 11 agent outputs + Orchestrator synthesis briefing"],
+                "sources": ["All prior agent outputs (no tools)"],
+            },
+            {
+                "icon": "📝",
+                "name": "Report Writer",
+                "role": "Writes insight-driven final report with INVEST/WATCH/PASS recommendation.",
+                "methodology": [
+                    "Follows report structure to write comprehensive Markdown memo",
+                    "Includes specific numbers, data points, and inline source citations",
+                    "Balances bull and bear cases with evidence-based reasoning",
+                    "Renders final INVEST/WATCH/PASS recommendation with confidence level",
+                    "Includes DD Questionnaire and next steps",
+                ],
+                "sources": ["All prior agent outputs + Report Structure"],
             },
         ],
     },
@@ -733,48 +726,40 @@ def _get_agent_phases(lang: str) -> list:
     ko_meta = [
         {
             "label": "1단계 — 병렬 리서치",
-            "description": "5개의 전문 에이전트가 **동시에** 실행됩니다. 각각 기업의 다른 차원을 독립적으로 리서치하며, 서로를 기다리지 않습니다.",
+            "description": "6개의 전문 에이전트가 **동시에** 실행됩니다. 각각 기업의 다른 차원을 독립적으로 리서치합니다.",
             "agents": [
-                ("💰", "재무 분석가",        "재무 건전성, 수익성, 회계 품질을 평가합니다."),
-                ("🌍", "시장 리서처",        "TAM/SAM 추정, 경쟁 환경 분석, 거시 트렌드 파악"),
-                ("⚖️", "법적 리스크 분석가",  "소송, 규제 노출, IP 리스크, 거버넌스 문제를 분석합니다."),
-                ("👥", "경영진 분석가",       "창업자, 임원진, 이사회, 조직 성숙도를 평가합니다."),
-                ("🔬", "기술·제품 분석가",    "제품 성숙도, 기술 해자, 확장성, PMF를 평가합니다."),
+                ("🌍", "시장 분석",          "TAM/SAM/SOM, CAGR, 시장 트렌드를 분석합니다."),
+                ("🏢", "경쟁사 분석",        "모든 사업 라인의 경쟁사를 파악하고 비교 매트릭스를 구축합니다."),
+                ("💰", "재무 분석",          "5년 재무제표, 비율, 현금흐름 + DCF/시장기반/자산기반 밸류에이션"),
+                ("🔬", "기술 분석",          "핵심 기술, IP/특허, 기술 성숙도를 경쟁사와 비교 분석합니다."),
+                ("⚖️", "법률·규제 분석",     "투자 구조 리스크 + 비즈니스 규제 리스크를 분석합니다."),
+                ("👥", "팀 분석",            "리더십 프로필, 역량 분석, 이탈 이력을 평가합니다."),
             ],
         },
         {
-            "label": "2단계 — 병렬 분석",
-            "description": "4개의 투자 논거 에이전트가 **동시에** 실행됩니다. 각각 1단계 보고서를 전부 읽고 다양한 각도에서 투자 기회를 검증합니다.",
+            "label": "2단계 — 종합",
+            "description": "R&A 종합 + 리스크 평가가 **병렬**로 실행되고, 전략적 인사이트가 **순차적**으로 실행됩니다.",
             "agents": [
-                ("📈", "강세 논거 분석가",    "가장 강력한 투자 논거를 구축하고 상방 가치를 수치화합니다."),
-                ("📉", "약세 논거 분석가",    "투자에 반하는 가장 강력한 주장을 구축하고 치명적 결함을 찾습니다."),
-                ("🧮", "밸류에이션 분석가",   "DCF, 매출 배수, 선례 거래를 이용해 공정가치를 추정합니다."),
-                ("🚩", "위험 신호 탐지기",    "1단계 보고서 전반에서 모순, 누락, 사기 신호를 교차 검토합니다."),
+                ("📊", "R&A 종합",           "1단계를 3-5개 핵심 투자 논거 + CDD/LDD/FDD 스코어카드로 종합합니다."),
+                ("⚠️", "리스크 평가",         "모든 리스크를 확률/영향/심각도 매트릭스로 분석합니다."),
+                ("🎯", "전략적 인사이트",     "INVEST/WATCH/PASS 결정 + 상세 근거 + 시너지 분석"),
             ],
         },
         {
-            "label": "3단계 — 순차 검증",
-            "description": "3개의 QA 에이전트가 **순차적으로** 실행됩니다. 각 단계는 이전 단계 결과에 의존합니다. 순서: 팩트체크 → 스트레스 테스트 → 완성도 점검.",
+            "label": "3단계 — 검토 & 비평",
+            "description": "순차: **검토** (주장 검증) → **비평** (5개 기준 채점) → **DD 질문서**. 비평 에이전트가 품질 미달 시 **피드백 루프**를 실행합니다 (최대 2회).",
             "agents": [
-                ("🔎", "팩트체커",            "1·2단계의 모든 중요 주장을 독립적으로 검증합니다."),
-                ("⚡", "스트레스 테스트 분석가","하방 시나리오 3가지를 정량적 재무 영향과 함께 모델링합니다."),
-                ("📋", "완성도 검사기",        "QA 감사 — 커버리지 갭을 파악하고 의사결정 준비도를 평가합니다."),
+                ("🔎", "검토 에이전트",       "출처 검증, 정량적 정확도, 논리적 일관성을 확인합니다."),
+                ("📋", "비평 에이전트",       "5개 기준 채점(1-10): 논리, 완성도, 정확도, 서술 편향, 인사이트 실효성"),
+                ("❓", "DD 질문서",           "미해결 이슈 목록 + 구조화된 DD 질문서를 작성합니다."),
             ],
         },
         {
-            "label": "오케스트레이터 — 품질 게이트",
-            "description": "**오케스트레이터**는 **각 단계 후** 실행됩니다. 에이전트 출력을 점수 매기고, 약한 에이전트를 재실행하며, 품질이 충분할 때만 다음 단계로 진행합니다. 3단계 이후에는 라이브 도구로 전체 종합도 수행합니다.",
+            "label": "4단계 — 보고서",
+            "description": "**보고서 구조** 에이전트가 Why/What/How/Risk/Recommendations 프레임워크를 설계하고, **보고서 작성자**가 최종 메모를 작성합니다.",
             "agents": [
-                ("🎯", "1단계 검토", "5개 1단계 에이전트를 평가하고 약한 에이전트를 재실행합니다."),
-                ("🎯", "2단계 검토", "4개 2단계 에이전트를 평가하고 약한 에이전트를 재실행합니다."),
-                ("🎯", "3단계 검토 & 종합", "3단계 에이전트 평가 + 라이브 데이터로 전체 종합 브리핑을 작성합니다."),
-            ],
-        },
-        {
-            "label": "4단계 — 투자 메모",
-            "description": "**최종 보고서 에이전트**가 오케스트레이터의 종합 브리핑과 모든 에이전트 결과를 토대로 투자 메모를 작성합니다.",
-            "agents": [
-                ("📝", "최종 보고서 에이전트", "11개 에이전트 결과 + 오케스트레이터 브리핑을 종합하여 투자 메모를 작성합니다."),
+                ("📐", "보고서 구조",        "Why/What/How/Risk/Recommendations TOC를 설계합니다."),
+                ("📝", "보고서 작성자",       "인사이트 중심의 최종 보고서를 작성합니다."),
             ],
         },
     ]
@@ -972,6 +957,12 @@ if st.session_state.phase == "form":
             horizontal=True,
             help="Choose the language for the entire analysis and investment memo.",
         )
+        company_type = st.radio(
+            "Company type",
+            options=["Auto-detect", "Public", "Private"],
+            horizontal=True,
+            help="Auto-detect probes Yahoo Finance. Choose Private to skip stock/SEC data lookups.",
+        )
         uploaded_files = st.file_uploader(
             t("docs_label"),
             type=["pdf"],
@@ -1075,26 +1066,41 @@ if st.session_state.phase == "form":
         lang_map = {"English": "English", "한국어": "Korean"}
         lang_value = lang_map.get(language, "English")
 
+        # Map company type selector to is_public value
+        _ct_map = {"Auto-detect": None, "Public": True, "Private": False}
+        is_public_value = _ct_map.get(company_type)
+
         initial_state = {
             "company_name": company.strip(),
             "company_url": url.strip(),
             "uploaded_docs": doc_paths,
+            "is_public": is_public_value,
+            "ticker": None,
             "language": lang_value,
-            "financial_report": None,
-            "market_report": None,
-            "legal_report": None,
-            "management_report": None,
-            "tech_report": None,
-            "bull_case": None,
-            "bear_case": None,
-            "valuation": None,
-            "red_flags": [],
-            "verification": None,
-            "stress_test": None,
-            "completeness": None,
-            "orchestrator_briefing": None,
+            # Phase 1
+            "market_analysis": None,
+            "competitor_analysis": None,
+            "financial_analysis": None,
+            "tech_analysis": None,
+            "legal_regulatory": None,
+            "team_analysis": None,
+            # Phase 2
+            "ra_synthesis": None,
+            "risk_assessment": None,
+            "strategic_insight": None,
+            # Phase 3
+            "review_result": None,
+            "critique_result": None,
+            "dd_questions": None,
+            # Phase 4
+            "report_structure": None,
             "final_report": None,
             "recommendation": None,
+            # Feedback loop
+            "phase1_context": None,
+            "feedback_loop_count": 0,
+            "weak_sections": [],
+            # Bookkeeping
             "messages": [],
             "errors": [],
             "current_phase": "init",
@@ -1174,6 +1180,7 @@ elif st.session_state.phase == "running":
                 "token_usage":    job.get("token_usage", {}),
             },
             "pdf_bytes": pdf_bytes,
+            "pptx_path": job.get("pptx_path", ""),
             "company": job.get("company") or company,
         }
         st.session_state.history_pdf_cache[job_id] = pdf_bytes
@@ -1344,7 +1351,7 @@ elif st.session_state.phase == "results":
         _lang_toggle("results")
     st.divider()
 
-    col_dl, col_reset, col_hist, _ = st.columns([1, 1, 1, 1])
+    col_dl, col_pptx, col_reset, col_hist = st.columns([1, 1, 1, 1])
     with col_dl:
         if _pdf_bytes_result:
             st.download_button(
@@ -1353,6 +1360,19 @@ elif st.session_state.phase == "results":
                 file_name=f"due_diligence_{company.replace(' ', '_')}.pdf",
                 mime="application/pdf",
                 type="primary",
+                use_container_width=True,
+            )
+    with col_pptx:
+        # PPTX download — generate on-the-fly if not cached
+        _pptx_path = _job_data.get("pptx_path") or ""
+        if _pptx_path and os.path.exists(_pptx_path):
+            with open(_pptx_path, "rb") as f:
+                pptx_bytes = f.read()
+            st.download_button(
+                label="Download PPTX",
+                data=pptx_bytes,
+                file_name=f"due_diligence_{company.replace(' ', '_')}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 use_container_width=True,
             )
     with col_reset:

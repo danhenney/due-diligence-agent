@@ -14,83 +14,115 @@ def _pick(d: Any, *keys: str) -> dict:
     return {k: d[k] for k in keys if k in d}
 
 
-# ── Phase 1 slim helpers ───────────────────────────────────────────────────────
-
-def slim_financial(r: Any) -> dict:
-    return _pick(r, "summary", "revenue_trend", "profitability",
-                 "key_ratios", "red_flags", "strengths", "confidence_score")
-
-def slim_market(r: Any) -> dict:
-    return _pick(r, "summary", "market_size", "competitive_landscape",
-                 "barriers_to_entry", "red_flags", "strengths", "confidence_score")
-
-def slim_legal(r: Any) -> dict:
-    return _pick(r, "summary", "litigation", "regulatory",
-                 "red_flags", "strengths", "confidence_score")
-
-def slim_management(r: Any) -> dict:
-    return _pick(r, "summary", "founders", "key_person_risk",
-                 "team_gaps", "red_flags", "strengths", "confidence_score")
-
-def slim_tech(r: Any) -> dict:
-    return _pick(r, "summary", "technical_moat", "product_market_fit",
-                 "technical_risks", "red_flags", "strengths", "confidence_score")
-
-
-def slim_red_flags(flags: Any) -> list:
-    """Keep first 10 non-full_report flags; only type/severity/description."""
-    if not isinstance(flags, list):
+def slim_sources(sources: Any, max_sources: int = 10) -> list[dict]:
+    """Keep at most max_sources, retaining only label + url."""
+    if not isinstance(sources, list):
         return []
     out = []
-    for f in flags:
-        if not isinstance(f, dict) or f.get("type") == "full_report":
+    for s in sources:
+        if not isinstance(s, dict) or not s.get("url"):
             continue
-        out.append({k: f[k] for k in ("type", "severity", "description") if k in f})
-        if len(out) >= 10:
+        out.append({"label": s.get("label", ""), "url": s["url"]})
+        if len(out) >= max_sources:
             break
     return out
 
 
-# ── Phase 2 slim helpers ───────────────────────────────────────────────────────
+# ── Phase 1 slim helpers ─────────────────────────────────────────────────────
 
-def slim_bull(r: Any) -> dict:
-    return _pick(r, "thesis_title", "core_thesis", "key_catalysts",
-                 "upside_scenario", "confidence_score")
+def slim_market_analysis(r: Any) -> dict:
+    d = _pick(r, "summary", "tam", "sam", "som", "cagr", "trends",
+              "market_drivers", "red_flags", "strengths", "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
-def slim_bear(r: Any) -> dict:
-    return _pick(r, "bear_thesis_title", "core_bear_thesis", "key_risks",
-                 "downside_scenario", "confidence_score")
+def slim_competitor(r: Any) -> dict:
+    d = _pick(r, "summary", "competitors", "comparison_matrix",
+              "market_share", "competitive_gaps", "red_flags", "strengths",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
-def slim_valuation(r: Any) -> dict:
-    return _pick(r, "summary", "fair_value_range", "upside_to_current",
-                 "valuation_risks", "confidence_score")
+def slim_financial_analysis(r: Any) -> dict:
+    d = _pick(r, "summary", "revenue_trend", "profitability", "balance_sheet",
+              "cash_flow", "key_ratios", "valuation", "red_flags", "strengths",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
+
+def slim_tech(r: Any) -> dict:
+    d = _pick(r, "summary", "core_technologies", "ip_patents",
+              "tech_maturity", "competitive_comparison", "red_flags", "strengths",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
+
+def slim_legal_regulatory(r: Any) -> dict:
+    d = _pick(r, "summary", "investment_structure_risks", "business_regulatory_risks",
+              "litigation", "ip_risks", "red_flags", "strengths",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
+
+def slim_team(r: Any) -> dict:
+    d = _pick(r, "summary", "leadership_profiles", "capability_assessment",
+              "departure_history", "key_person_risk", "red_flags", "strengths",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
 
-# ── Phase 3 slim helpers ───────────────────────────────────────────────────────
+# ── Phase 2 slim helpers ─────────────────────────────────────────────────────
 
-def slim_verification(r: Any) -> dict:
-    return _pick(r, "summary", "contradicted_claims", "unverified_claims",
-                 "overall_factual_integrity", "confidence_score")
+def slim_ra_synthesis(r: Any) -> dict:
+    d = _pick(r, "summary", "core_investment_arguments", "attractiveness_scorecard",
+              "key_findings", "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
-def slim_stress(r: Any) -> dict:
-    return _pick(r, "summary", "scenarios", "stress_test_conclusion",
-                 "key_vulnerabilities", "confidence_score")
+def slim_risk_assessment(r: Any) -> dict:
+    d = _pick(r, "summary", "risk_matrix", "top_risks",
+              "mitigation_strategies", "overall_risk_level",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
-def slim_completeness(r: Any) -> dict:
-    return _pick(r, "summary", "coverage_scores", "coverage_gaps",
-                 "decision_readiness", "overall_completeness_score")
-
-
-# ── Orchestrator slim helper ───────────────────────────────────────────────────
-
-def slim_orchestrator(r: Any) -> dict:
-    return _pick(r, "cross_agent_inconsistencies", "critical_gaps_filled",
-                 "overall_data_quality", "synthesis_guidance",
-                 "orchestrator_recommendation", "recommendation_rationale",
-                 "confidence_score")
+def slim_strategic_insight(r: Any) -> dict:
+    d = _pick(r, "summary", "recommendation", "rationale",
+              "synergy_analysis", "key_conditions", "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
 
 
-# ── Serializer ─────────────────────────────────────────────────────────────────
+# ── Phase 3 slim helpers ─────────────────────────────────────────────────────
+
+def slim_review(r: Any) -> dict:
+    d = _pick(r, "summary", "verified_claims", "unverified_claims",
+              "contradicted_claims", "accuracy_assessment",
+              "confidence_score", "sources")
+    if "sources" in d:
+        d["sources"] = slim_sources(d["sources"])
+    return d
+
+def slim_critique(r: Any) -> dict:
+    return _pick(r, "logic", "completeness", "accuracy",
+                 "narrative_bias", "insight_effectiveness",
+                 "total_score", "feedback", "summary")
+
+def slim_dd_questions(r: Any) -> dict:
+    return _pick(r, "unresolved_issues", "dd_questionnaire", "summary")
+
+
+# ── Serializer ────────────────────────────────────────────────────────────────
 
 def compact(data: Any) -> str:
     """Compact JSON — no indent, no extra whitespace. ~25% smaller than indent=2."""

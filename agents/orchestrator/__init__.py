@@ -1,1 +1,1 @@
-from agents.orchestrator import phase1_check, phase2_check, phase3_check
+# Orchestrator module — legacy quality gates replaced by critique_agent + workflow routing.

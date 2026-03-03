@@ -37,6 +37,7 @@ def main(
         [], "--docs", "-d", help="Path(s) to uploaded PDF documents.", show_default=False
     ),
     output: str | None = typer.Option(None, "--output", "-o", help="Output file path for the memo."),
+    private: bool = typer.Option(False, "--private", help="Treat as a private company (skip yfinance/EDGAR)."),
     no_checkpoint: bool = typer.Option(False, "--no-checkpoint", help="Disable SQLite checkpointing."),
     thread_id: str | None = typer.Option(
         None, "--thread-id", help="Resume a prior run using its thread ID."
@@ -67,21 +68,32 @@ def main(
         "company_name": company,
         "company_url": url,
         "uploaded_docs": valid_docs,
-        "financial_report": None,
-        "market_report": None,
-        "legal_report": None,
-        "management_report": None,
-        "tech_report": None,
-        "bull_case": None,
-        "bear_case": None,
-        "valuation": None,
-        "red_flags": [],
-        "verification": None,
-        "stress_test": None,
-        "completeness": None,
+        "is_public": False if private else None,   # None = auto-detect
+        "ticker": None,
+        # Phase 1
+        "market_analysis": None,
+        "competitor_analysis": None,
+        "financial_analysis": None,
+        "tech_analysis": None,
+        "legal_regulatory": None,
+        "team_analysis": None,
+        # Phase 2
+        "ra_synthesis": None,
+        "risk_assessment": None,
+        "strategic_insight": None,
+        # Phase 3
+        "review_result": None,
+        "critique_result": None,
+        "dd_questions": None,
+        # Phase 4
+        "report_structure": None,
         "final_report": None,
         "recommendation": None,
-        "orchestrator_briefing": None,
+        # Feedback loop
+        "phase1_context": None,
+        "feedback_loop_count": 0,
+        "weak_sections": [],
+        # Bookkeeping
         "messages": [],
         "errors": [],
         "current_phase": "init",
@@ -111,17 +123,18 @@ def main(
     final_state = None
     phase_messages = {
         "input_processor": "Initializing analysis...",
-        "phase1_parallel": "Phase 1: Running specialist agents in parallel (Financial, Market, Legal, Management, Tech)...",
-        "phase1_aggregator": "Phase 1 complete. Aggregating...",
-        "phase1_check": "Orchestrator: Scoring Phase 1 agents, revising weak ones...",
-        "phase2_parallel": "Phase 2: Building thesis (Bull Case, Bear Case, Valuation, Red Flags)...",
+        "phase1_parallel": "Phase 1: Running 6 research agents in parallel (Market, Competitors, Financial, Tech, Legal, Team)...",
+        "phase1_aggregator": "Phase 1 complete. Aggregating context...",
+        "phase2_parallel": "Phase 2: Synthesizing (R&A Synthesis + Risk Assessment in parallel)...",
+        "strategic_insight": "Phase 2: Strategic Insight (rendering recommendation)...",
         "phase2_aggregator": "Phase 2 complete. Aggregating...",
-        "phase2_check": "Orchestrator: Scoring Phase 2 agents, revising weak ones...",
-        "fact_checker": "Phase 3: Fact-checking all claims...",
-        "stress_test": "Phase 3: Running stress tests...",
-        "completeness": "Phase 3: Checking completeness...",
-        "phase3_check": "Orchestrator: Scoring Phase 3 agents + final synthesis...",
-        "final_report_agent": "Phase 4: Generating Investment Memo...",
+        "review_agent": "Phase 3: Review Agent (verifying claims)...",
+        "critique_agent": "Phase 3: Critique Agent (scoring 5 criteria)...",
+        "selective_rerun": "Feedback Loop: Re-running weak agents...",
+        "phase1_restart": "Feedback Loop: Full Phase 1 restart...",
+        "dd_questions": "Phase 3: DD Questions (building questionnaire)...",
+        "report_structure": "Phase 4: Designing report structure...",
+        "report_writer": "Phase 4: Writing final report...",
     }
 
     with Progress(

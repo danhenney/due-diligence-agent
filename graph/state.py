@@ -4,38 +4,43 @@ from langgraph.graph.message import add_messages
 
 
 class DueDiligenceState(TypedDict):
-    # ── Input ──────────────────────────────────────────────────────────────
+    # ── Input ─────────────────────────────────────────────────────────────
     company_name: str
     company_url: str | None
     uploaded_docs: list[str]          # local file paths to PDFs
+    is_public: bool | None            # True = public, False = private, None = unknown
+    ticker: str | None                # resolved ticker symbol (public companies only)
 
-    # ── Phase 1 — parallel specialist outputs ──────────────────────────────
-    financial_report: dict | None
-    market_report: dict | None
-    legal_report: dict | None
-    management_report: dict | None
-    tech_report: dict | None
+    # ── Phase 1 — Research & Analysis (6 parallel agents) ─────────────────
+    market_analysis: dict | None
+    competitor_analysis: dict | None
+    financial_analysis: dict | None
+    tech_analysis: dict | None
+    legal_regulatory: dict | None
+    team_analysis: dict | None
 
-    # ── Phase 2 — parallel synthesis outputs ───────────────────────────────
-    bull_case: dict | None
-    bear_case: dict | None
-    valuation: dict | None
-    red_flags: list[dict]
+    # ── Phase 2 — Synthesis ───────────────────────────────────────────────
+    ra_synthesis: dict | None
+    risk_assessment: dict | None
+    strategic_insight: dict | None
 
-    # ── Phase 3 — sequential verification outputs ──────────────────────────
-    verification: dict | None
-    stress_test: dict | None
-    completeness: dict | None
+    # ── Phase 3 — Review & Critique ───────────────────────────────────────
+    review_result: dict | None
+    critique_result: dict | None      # contains 5 scores + total + feedback
+    dd_questions: dict | None
 
-    # ── Orchestrator — quality gate between Phase 3 and Phase 4 ───────────
-    orchestrator_briefing: dict | None
-
-    # ── Phase 4 — final deliverable ────────────────────────────────────────
+    # ── Phase 4 — Output ──────────────────────────────────────────────────
+    report_structure: dict | None
     final_report: str | None
-    recommendation: str | None        # PASS / WATCH / INVEST
+    recommendation: str | None        # INVEST / WATCH / PASS
 
-    # ── Shared bookkeeping ─────────────────────────────────────────────────
+    # ── Feedback loop ─────────────────────────────────────────────────────
+    phase1_context: str | None        # compact Phase 1 summary, built once
+    feedback_loop_count: int          # starts 0, max 2
+    weak_sections: list[str]          # agent names needing re-run
+
+    # ── Shared bookkeeping ────────────────────────────────────────────────
     messages: Annotated[list, add_messages]
     errors: Annotated[list[str], operator.add]
     current_phase: str
-    language: str                         # "English" | "Korean"
+    language: str                     # "English" | "Korean"

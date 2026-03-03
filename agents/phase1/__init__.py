@@ -1,3 +1,3 @@
-from . import financial_analyst, market_research, legal_risk, management_team, tech_product
+from . import market_analysis, competitor_analysis, financial_analysis, tech_analysis, legal_regulatory, team_analysis
 
-__all__ = ["financial_analyst", "market_research", "legal_risk", "management_team", "tech_product"]
+__all__ = ["market_analysis", "competitor_analysis", "financial_analysis", "tech_analysis", "legal_regulatory", "team_analysis"]
