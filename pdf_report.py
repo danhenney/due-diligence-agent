@@ -473,18 +473,19 @@ def _build_cover(company: str, recommendation: str, styles: dict) -> list:
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def generate_pdf(state: dict[str, Any], job_id: str) -> str:
+def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = None) -> str:
     """Generate a PDF report from the completed due diligence state.
 
     Args:
         state: The merged LangGraph state dict (includes final_report, recommendation, etc.)
         job_id: Unique job identifier used to name the output file.
+        output_dir: Optional directory for the PDF. Defaults to ``reports/``.
 
     Returns:
         Absolute path to the generated PDF file.
     """
-    reports_dir = Path("reports")
-    reports_dir.mkdir(exist_ok=True)
+    reports_dir = Path(output_dir) if output_dir else Path("reports")
+    reports_dir.mkdir(parents=True, exist_ok=True)
     output_path = str(reports_dir / f"{job_id}.pdf")
 
     company = state.get("company_name") or "Unknown Company"

@@ -1,5 +1,4 @@
 """Streamlit web UI for the Due Diligence Agent."""
-import json
 import os
 import shutil
 import tempfile
@@ -9,71 +8,17 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-REPORTS_DIR = Path("reports")
-_JOBS_DIR = REPORTS_DIR / "jobs"
+from supabase_storage import (
+    read_job,
+    update_job,
+    load_history,
+    save_history_entry,
+    upload_pdf,
+    download_pdf,
+)
 
 # Max concurrent analyses. Additional submissions wait in queue.
 _ANALYSIS_SEMAPHORE = threading.Semaphore(2)
-
-# Jobs stuck in "running" longer than this are marked as timed-out.
-_STALE_JOB_TIMEOUT_SEC = 5400  # 90 minutes
-
-
-# ── File-based job state (survives multi-process + navigation) ─────────────────
-
-def _job_file(job_id: str) -> Path:
-    _JOBS_DIR.mkdir(parents=True, exist_ok=True)
-    return _JOBS_DIR / f"{job_id}.json"
-
-
-def _read_job(job_id: str) -> dict:
-    f = _job_file(job_id)
-    try:
-        if f.exists():
-            data = json.loads(f.read_text(encoding="utf-8"))
-            # Auto-expire stale "running" jobs (e.g. after a server restart mid-run)
-            if data.get("status") in ("running", "queued"):
-                start = data.get("start_time") or 0
-                if start and time.time() - start > _STALE_JOB_TIMEOUT_SEC:
-                    data["status"] = "error"
-                    data["error"] = (
-                        "Analysis timed out or the server was restarted mid-run. "
-                        "Please submit again."
-                    )
-            return data
-    except Exception:
-        pass
-    return {"status": "unknown", "progress": [], "error": None, "start_time": None}
-
-
-def _update_job(job_id: str, updates: dict) -> None:
-    """Merge updates into the job file using an atomic tmp→rename write."""
-    f = _job_file(job_id)
-    data = _read_job(job_id)
-    data.update(updates)
-    tmp = f.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(f)
-
-
-# ── History ────────────────────────────────────────────────────────────────────
-
-def _load_history() -> list[dict]:
-    hist_file = REPORTS_DIR / "history.json"
-    if hist_file.exists():
-        try:
-            return json.loads(hist_file.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-    return []
-
-
-def _save_history_entry(entry: dict) -> None:
-    hist_file = REPORTS_DIR / "history.json"
-    history = _load_history()
-    history.insert(0, entry)
-    REPORTS_DIR.mkdir(exist_ok=True)
-    hist_file.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ── Token cost tracking ────────────────────────────────────────────────────────
@@ -134,10 +79,10 @@ def _cost_usd(inp: int, out: int) -> float:
 def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
     """Daemon thread — waits for a semaphore slot, then runs the full pipeline."""
     # Wait for a free slot (max 2 concurrent analyses)
-    _update_job(job_id, {"status": "queued"})
+    update_job(job_id, {"status": "queued"})
     _ANALYSIS_SEMAPHORE.acquire()
     try:
-        _update_job(job_id, {"status": "running", "start_time": time.time()})
+        update_job(job_id, {"status": "running", "start_time": time.time()})
         _run_pipeline(job_id, initial_state, company, tmp_dir)
     finally:
         _ANALYSIS_SEMAPHORE.release()
@@ -188,7 +133,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                     "cost_usd":      _cost_usd(usage["input_tokens"], usage["output_tokens"]),
                 }
 
-            _update_job(job_id, {
+            update_job(job_id, {
                 "progress":    progress.copy(),
                 "token_usage": token_usage.copy(),
             })
@@ -206,26 +151,29 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(phase3_check_node,  "phase3_check")
         _step(final_report_node,  "final_report_agent")
 
-        pdf_path = pdf_report.generate_pdf(state, job_id)
+        pdf_path = pdf_report.generate_pdf(state, job_id, output_dir=tmp_dir)
 
-        _save_history_entry({
+        # Upload PDF to Supabase Storage
+        storage_path = upload_pdf(job_id, pdf_path)
+
+        save_history_entry({
             "id": job_id,
             "company": company,
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "pdf_path": str(pdf_path),
+            "pdf_path": storage_path,
         })
 
-        _update_job(job_id, {
+        update_job(job_id, {
             "status":         "complete",
-            "pdf_path":       str(pdf_path),
+            "pdf_path":       storage_path,
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "final_report":   state.get("final_report") or "",
             "token_usage":    token_usage,
         })
 
     except Exception as exc:
-        _update_job(job_id, {"status": "error", "error": str(exc)})
+        update_job(job_id, {"status": "error", "error": str(exc)})
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -235,7 +183,8 @@ import streamlit as st
 # Inject Streamlit Cloud secrets into os.environ so config.py's os.getenv() works.
 # This is a no-op when running locally with a .env file.
 try:
-    for _k in ["ANTHROPIC_API_KEY", "TAVILY_API_KEY", "EDGAR_USER_AGENT"]:
+    for _k in ["ANTHROPIC_API_KEY", "TAVILY_API_KEY", "EDGAR_USER_AGENT",
+                "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]:
         if _k in st.secrets and not os.environ.get(_k):
             os.environ[_k] = str(st.secrets[_k])
 except Exception:
@@ -290,7 +239,7 @@ _UI = {
         "cost_col":             "Cost (USD)",
         "total_label":          "**TOTAL**",
         "history_title":        "## 🕐 Analysis History",
-        "history_caption":      "All due diligence reports generated on this machine.",
+        "history_caption":      "All due diligence reports generated so far.",
         "back_btn":             "← Back",
         "back_running_btn":     "← Back to Running Analysis",
         "no_history":           "No analyses yet. Submit a company on the main page to get started.",
@@ -351,7 +300,7 @@ _UI = {
         "cost_col":             "비용 (USD)",
         "total_label":          "**합계**",
         "history_title":        "## 🕐 분석 기록",
-        "history_caption":      "이 서버에서 생성된 모든 실사 보고서",
+        "history_caption":      "지금까지 생성된 모든 실사 보고서",
         "back_btn":             "← 뒤로",
         "back_running_btn":     "← 진행 중인 분석으로 돌아가기",
         "no_history":           "아직 분석 내역이 없습니다. 메인 페이지에서 기업을 입력하여 시작하세요.",
@@ -930,7 +879,7 @@ for key, default in [
 # If there's an active job still running or queued, redirect to the running screen automatically
 _active_job = st.session_state.get("job_id")
 if _active_job and st.session_state.phase not in ("running", "results", "history"):
-    if _read_job(_active_job).get("status") in ("running", "queued"):
+    if read_job(_active_job).get("status") in ("running", "queued"):
         st.session_state.phase = "running"
 
 
@@ -1090,7 +1039,7 @@ if st.session_state.phase == "form":
             "current_phase": "init",
         }
 
-        _update_job(job_id, {
+        update_job(job_id, {
             "status": "running",
             "progress": [],
             "error": None,
@@ -1117,11 +1066,13 @@ elif st.session_state.phase == "running":
     job_id  = st.session_state.get("job_id", "")
     company = st.session_state.get("company", "")
 
-    job = _read_job(job_id)
+    job = read_job(job_id)
 
     if job["status"] == "complete":
-        pdf_path = job.get("pdf_path", "")
-        pdf_bytes = Path(pdf_path).read_bytes() if pdf_path and Path(pdf_path).exists() else b""
+        storage_path = job.get("pdf_path", "")
+        pdf_bytes = download_pdf(storage_path) if storage_path else b""
+        if not pdf_bytes:
+            pdf_bytes = b""
         st.session_state.result = {
             "final_report":   job.get("final_report", ""),
             "recommendation": job.get("recommendation", "WATCH"),
@@ -1365,7 +1316,7 @@ elif st.session_state.phase == "history":
     _back_job   = st.session_state.get("job_id")
     _back_label = t("back_btn")
     _back_phase = "form"
-    if _back_job and _read_job(_back_job).get("status") in ("running", "queued"):
+    if _back_job and read_job(_back_job).get("status") in ("running", "queued"):
         _back_label = t("back_running_btn")
         _back_phase = "running"
     if st.button(_back_label):
@@ -1373,7 +1324,7 @@ elif st.session_state.phase == "history":
         st.rerun()
     st.divider()
 
-    history = _load_history()
+    history = load_history()
 
     if not history:
         st.info(t("no_history"))
@@ -1401,11 +1352,12 @@ elif st.session_state.phase == "history":
                 job_id   = entry.get("id", "")
                 pdf_bytes = st.session_state.history_pdf_cache.get(job_id)
                 if pdf_bytes is None:
-                    pdf_path = entry.get("pdf_path", "")
-                    if pdf_path and Path(pdf_path).exists():
+                    storage_path = entry.get("pdf_path", "")
+                    if storage_path:
                         try:
-                            pdf_bytes = Path(pdf_path).read_bytes()
-                            st.session_state.history_pdf_cache[job_id] = pdf_bytes
+                            pdf_bytes = download_pdf(storage_path)
+                            if pdf_bytes:
+                                st.session_state.history_pdf_cache[job_id] = pdf_bytes
                         except Exception:
                             pdf_bytes = None
                 if pdf_bytes:
