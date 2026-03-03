@@ -97,20 +97,36 @@ def update_job(job_id: str, updates: dict) -> None:
         if key in row and not isinstance(row[key], str):
             row[key] = json.dumps(row[key], ensure_ascii=False)
 
-    sb.table("jobs").upsert(row, on_conflict="id").execute()
+    try:
+        sb.table("jobs").upsert(row, on_conflict="id").execute()
+    except Exception:
+        # company column may not exist yet — retry without it
+        if "company" in row:
+            row.pop("company")
+            sb.table("jobs").upsert(row, on_conflict="id").execute()
 
 
 def load_queue() -> list[dict]:
     """Load all running/queued jobs (global queue visible to all users)."""
     try:
         sb = _get_client()
-        resp = (
-            sb.table("jobs")
-            .select("id, company, status, progress, start_time, token_usage")
-            .in_("status", ["running", "queued"])
-            .order("start_time", desc=False)
-            .execute()
-        )
+        # Try with company column; fall back without it if column doesn't exist yet
+        try:
+            resp = (
+                sb.table("jobs")
+                .select("id, company, status, progress, start_time, token_usage")
+                .in_("status", ["running", "queued"])
+                .order("start_time", desc=False)
+                .execute()
+            )
+        except Exception:
+            resp = (
+                sb.table("jobs")
+                .select("id, status, progress, start_time, token_usage")
+                .in_("status", ["running", "queued"])
+                .order("start_time", desc=False)
+                .execute()
+            )
         rows = resp.data or []
         for row in rows:
             if isinstance(row.get("progress"), str):
