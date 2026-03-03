@@ -12,6 +12,7 @@ from supabase_storage import (
     read_job,
     update_job,
     load_history,
+    load_queue,
     save_history_entry,
     upload_pdf,
     download_pdf,
@@ -255,6 +256,16 @@ _UI = {
         "progress_text":        "**{pct}%** — step {done} of {total}  ·  elapsed {elapsed}  ·  {eta}",
         "eta_estimating":       "Estimating…",
         "eta_remaining":        "~{} remaining",
+        "queue_heading":        "#### Active Analyses",
+        "queue_empty":          "No analyses running.",
+        "queue_status_running": "Running",
+        "queue_status_queued":  "Queued",
+        "queue_view_btn":       "View",
+        "queue_progress":       "{}%",
+        "queue_eta":            "~{} left",
+        "queue_started":        "Started {}s ago",
+        "back_to_form_btn":     "← Back to Form",
+        "job_picker_label":     "Switch analysis:",
     },
     "ko": {
         "app_title":            "## 📊 실사 에이전트",
@@ -316,6 +327,16 @@ _UI = {
         "progress_text":        "**{pct}%** — {done}/{total}단계  ·  경과 {elapsed}  ·  {eta}",
         "eta_estimating":       "예상 중…",
         "eta_remaining":        "~{} 남음",
+        "queue_heading":        "#### 진행 중인 분석",
+        "queue_empty":          "진행 중인 분석이 없습니다.",
+        "queue_status_running": "실행 중",
+        "queue_status_queued":  "대기 중",
+        "queue_view_btn":       "보기",
+        "queue_progress":       "{}%",
+        "queue_eta":            "~{} 남음",
+        "queue_started":        "{}초 전 시작",
+        "back_to_form_btn":     "← 입력 폼으로",
+        "job_picker_label":     "분석 전환:",
     },
 }
 
@@ -866,21 +887,15 @@ if _missing:
 # ── Session state defaults ─────────────────────────────────────────────────────
 for key, default in [
     ("phase", "form"),
-    ("result", None),
-    ("pdf_bytes", None),
+    ("active_jobs", []),        # list of job_id strings submitted by this user
+    ("results", {}),            # {job_id: {result, pdf_bytes}}
+    ("viewing_job", None),      # which job the running/results screen is showing
     ("company", ""),
-    ("job_id", None),
     ("history_pdf_cache", {}),
     ("ui_lang", "en"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
-
-# If there's an active job still running or queued, redirect to the running screen automatically
-_active_job = st.session_state.get("job_id")
-if _active_job and st.session_state.phase not in ("running", "results", "history"):
-    if read_job(_active_job).get("status") in ("running", "queued"):
-        st.session_state.phase = "running"
 
 
 # ── Language toggle helper ─────────────────────────────────────────────────────
@@ -999,6 +1014,59 @@ if st.session_state.phase == "form":
                 with cols[i % 2]:
                     render_agent_card(agent)
 
+    # ── Global Queue ──────────────────────────────────────────────────────────
+    queue_items = load_queue()
+    if queue_items:
+        st.divider()
+        st.markdown(t("queue_heading"))
+        for qi in queue_items:
+            qi_progress = qi.get("progress") or []
+            qi_start = qi.get("start_time") or time.time()
+            qi_elapsed = time.time() - qi_start
+
+            completed_w = sum(NODE_WEIGHTS.get(n, 0) for n in qi_progress)
+            total_w = sum(NODE_WEIGHTS.values())
+            qi_pct = int(completed_w / total_w * 100) if total_w else 0
+
+            # ETA
+            frac = completed_w / total_w if total_w else 0
+            if frac > 0.02:
+                est_total = qi_elapsed / frac
+                remaining = max(0, est_total - qi_elapsed)
+                rem_s = int(remaining)
+                eta_label = t("queue_eta", f"{rem_s // 60}m {rem_s % 60:02d}s" if rem_s >= 60 else f"{rem_s}s")
+            else:
+                eta_label = ""
+
+            qi_status = t("queue_status_running") if qi.get("status") == "running" else t("queue_status_queued")
+            qi_company = qi.get("company") or qi.get("id", "")[:8]
+
+            c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1.2, 0.8])
+            with c1:
+                st.markdown(f"**{qi_company}**")
+            with c2:
+                st.caption(qi_status)
+            with c3:
+                st.caption(t("queue_progress", qi_pct))
+            with c4:
+                st.caption(eta_label)
+            with c5:
+                qi_id = qi.get("id", "")
+                if qi_id in st.session_state.active_jobs:
+                    if st.button(t("queue_view_btn"), key=f"qv_{qi_id}"):
+                        st.session_state.viewing_job = qi_id
+                        # Look up company for this job
+                        st.session_state.company = qi_company
+                        st.session_state.phase = "running"
+                        st.rerun()
+
+        # Auto-poll if user has active jobs still in the queue
+        _user_active = [j for j in st.session_state.active_jobs
+                        if any(qi.get("id") == j for qi in queue_items)]
+        if _user_active:
+            time.sleep(8)
+            st.rerun()
+
     # ── Analysis runner ───────────────────────────────────────────────────────
     if run and company.strip() and url.strip():
         tmp_dir = tempfile.mkdtemp()
@@ -1044,6 +1112,7 @@ if st.session_state.phase == "form":
             "progress": [],
             "error": None,
             "start_time": time.time(),
+            "company": company.strip(),
         })
 
         t_thread = threading.Thread(
@@ -1053,7 +1122,8 @@ if st.session_state.phase == "form":
         )
         t_thread.start()
 
-        st.session_state.job_id = job_id
+        st.session_state.active_jobs.append(job_id)
+        st.session_state.viewing_job = job_id
         st.session_state.company = company.strip()
         st.session_state.phase = "running"
         st.rerun()
@@ -1063,8 +1133,39 @@ if st.session_state.phase == "form":
 # SCREEN 2 — RUNNING (background thread progress)
 # ─────────────────────────────────────────────────────────────────────────────
 elif st.session_state.phase == "running":
-    job_id  = st.session_state.get("job_id", "")
+    job_id  = st.session_state.get("viewing_job", "")
     company = st.session_state.get("company", "")
+
+    # ── Job picker (if user has multiple active jobs) ──────────────────────
+    active_jobs = st.session_state.active_jobs
+    if len(active_jobs) > 1:
+        # Build label → job_id mapping
+        _picker_labels = {}
+        for _jid in active_jobs:
+            _jdata = read_job(_jid)
+            _jcompany = _jdata.get("company") or _jid[:8]
+            _jstatus = _jdata.get("status", "unknown")
+            _picker_labels[f"{_jcompany} ({_jstatus})"] = _jid
+        _current_label = next(
+            (lbl for lbl, jid in _picker_labels.items() if jid == job_id),
+            list(_picker_labels.keys())[0] if _picker_labels else "",
+        )
+        _selected_label = st.selectbox(
+            t("job_picker_label"),
+            options=list(_picker_labels.keys()),
+            index=list(_picker_labels.keys()).index(_current_label) if _current_label in _picker_labels else 0,
+            key="job_picker",
+        )
+        _selected_jid = _picker_labels[_selected_label]
+        if _selected_jid != job_id:
+            st.session_state.viewing_job = _selected_jid
+            _sel_data = read_job(_selected_jid)
+            st.session_state.company = _sel_data.get("company") or ""
+            st.rerun()
+
+    if not job_id:
+        st.session_state.phase = "form"
+        st.rerun()
 
     job = read_job(job_id)
 
@@ -1073,31 +1174,42 @@ elif st.session_state.phase == "running":
         pdf_bytes = download_pdf(storage_path) if storage_path else b""
         if not pdf_bytes:
             pdf_bytes = b""
-        st.session_state.result = {
-            "final_report":   job.get("final_report", ""),
-            "recommendation": job.get("recommendation", "WATCH"),
-            "token_usage":    job.get("token_usage", {}),
+        st.session_state.results[job_id] = {
+            "result": {
+                "final_report":   job.get("final_report", ""),
+                "recommendation": job.get("recommendation", "WATCH"),
+                "token_usage":    job.get("token_usage", {}),
+            },
+            "pdf_bytes": pdf_bytes,
+            "company": job.get("company") or company,
         }
-        st.session_state.pdf_bytes = pdf_bytes
         st.session_state.history_pdf_cache[job_id] = pdf_bytes
         st.session_state.phase = "results"
         st.rerun()
 
     elif job["status"] == "error":
         st.error(t("analysis_failed", job.get("error", "Unknown error")))
-        st.session_state.job_id = None
+        # Remove failed job from active list
+        if job_id in st.session_state.active_jobs:
+            st.session_state.active_jobs.remove(job_id)
         if st.button(t("try_again_btn")):
+            st.session_state.viewing_job = None
             st.session_state.phase = "form"
             st.rerun()
 
     elif job["status"] == "queued":
         # Waiting for a semaphore slot — show queue message
-        _q_hdr, _q_lang = st.columns([5, 1])
+        _q_hdr, _q_lang, _q_back = st.columns([4, 0.7, 1])
         with _q_hdr:
             st.markdown(t("queued_heading", company))
             st.caption(t("queued_caption"))
         with _q_lang:
             _lang_toggle("queued")
+        with _q_back:
+            st.markdown("")
+            if st.button(t("back_to_form_btn"), key="back_form_queued"):
+                st.session_state.phase = "form"
+                st.rerun()
         st.info(t("queued_info"))
         elapsed_sec = time.time() - (job.get("start_time") or time.time())
         st.caption(t("waiting_caption", int(elapsed_sec)))
@@ -1108,12 +1220,17 @@ elif st.session_state.phase == "running":
         # Still running — show live progress and poll
         _node_labels = _NODE_LABELS_KO if st.session_state.get("ui_lang") == "ko" else _NODE_LABELS_EN
 
-        _run_hdr, _run_lang, _run_hist = st.columns([5, 0.7, 0.8])
+        _run_hdr, _run_lang, _run_back, _run_hist = st.columns([4, 0.7, 1, 0.8])
         with _run_hdr:
             st.markdown(t("analyzing", company))
             st.caption(t("running_caption"))
         with _run_lang:
             _lang_toggle("running")
+        with _run_back:
+            st.markdown("")
+            if st.button(t("back_to_form_btn"), key="back_form_running"):
+                st.session_state.phase = "form"
+                st.rerun()
         with _run_hist:
             st.markdown("")
             if st.button(t("history_btn"), use_container_width=True, key="hist_running"):
@@ -1205,8 +1322,11 @@ elif st.session_state.phase == "running":
 # SCREEN 3 — RESULTS
 # ─────────────────────────────────────────────────────────────────────────────
 elif st.session_state.phase == "results":
-    result:  dict = st.session_state.result or {}
-    company: str  = st.session_state.company
+    _viewing = st.session_state.viewing_job or ""
+    _job_data = st.session_state.results.get(_viewing, {})
+    result:  dict = _job_data.get("result") or {}
+    _pdf_bytes_result: bytes = _job_data.get("pdf_bytes") or b""
+    company: str  = _job_data.get("company") or st.session_state.company
     rec = (result.get("recommendation") or "WATCH").upper()
 
     badge_class = {
@@ -1233,10 +1353,10 @@ elif st.session_state.phase == "results":
 
     col_dl, col_reset, col_hist, _ = st.columns([1, 1, 1, 1])
     with col_dl:
-        if st.session_state.pdf_bytes:
+        if _pdf_bytes_result:
             st.download_button(
                 label=t("download_btn"),
-                data=st.session_state.pdf_bytes,
+                data=_pdf_bytes_result,
                 file_name=f"due_diligence_{company.replace(' ', '_')}.pdf",
                 mime="application/pdf",
                 type="primary",
@@ -1244,10 +1364,11 @@ elif st.session_state.phase == "results":
             )
     with col_reset:
         if st.button(t("analyze_another_btn"), use_container_width=True):
-            st.session_state.phase    = "form"
-            st.session_state.result   = None
-            st.session_state.pdf_bytes = None
-            st.session_state.job_id   = None
+            # Remove this completed job from active list but keep others
+            if _viewing in st.session_state.active_jobs:
+                st.session_state.active_jobs.remove(_viewing)
+            st.session_state.viewing_job = None
+            st.session_state.phase = "form"
             st.rerun()
     with col_hist:
         if st.button(t("history_btn"), use_container_width=True, key="hist_results"):
@@ -1313,12 +1434,15 @@ elif st.session_state.phase == "history":
     with _hist_lang:
         _lang_toggle("history")
 
-    _back_job   = st.session_state.get("job_id")
+    # Check if any active job is still running
     _back_label = t("back_btn")
     _back_phase = "form"
-    if _back_job and read_job(_back_job).get("status") in ("running", "queued"):
-        _back_label = t("back_running_btn")
-        _back_phase = "running"
+    _viewing = st.session_state.get("viewing_job")
+    if _viewing and _viewing in st.session_state.active_jobs:
+        _vj = read_job(_viewing)
+        if _vj.get("status") in ("running", "queued"):
+            _back_label = t("back_running_btn")
+            _back_phase = "running"
     if st.button(_back_label):
         st.session_state.phase = _back_phase
         st.rerun()

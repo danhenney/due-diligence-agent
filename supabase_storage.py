@@ -100,6 +100,28 @@ def update_job(job_id: str, updates: dict) -> None:
     sb.table("jobs").upsert(row, on_conflict="id").execute()
 
 
+def load_queue() -> list[dict]:
+    """Load all running/queued jobs (global queue visible to all users)."""
+    try:
+        sb = _get_client()
+        resp = (
+            sb.table("jobs")
+            .select("id, company, status, progress, start_time, token_usage")
+            .in_("status", ["running", "queued"])
+            .order("start_time", desc=False)
+            .execute()
+        )
+        rows = resp.data or []
+        for row in rows:
+            if isinstance(row.get("progress"), str):
+                row["progress"] = json.loads(row["progress"])
+            if isinstance(row.get("token_usage"), str):
+                row["token_usage"] = json.loads(row["token_usage"])
+        return rows
+    except Exception:
+        return []
+
+
 # ── History ──────────────────────────────────────────────────────────────────
 
 def load_history() -> list[dict]:
