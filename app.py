@@ -1060,13 +1060,6 @@ if st.session_state.phase == "form":
                         st.session_state.phase = "running"
                         st.rerun()
 
-        # Auto-poll if user has active jobs still in the queue
-        _user_active = [j for j in st.session_state.active_jobs
-                        if any(qi.get("id") == j for qi in queue_items)]
-        if _user_active:
-            time.sleep(8)
-            st.rerun()
-
     # ── Analysis runner ───────────────────────────────────────────────────────
     if run and company.strip() and url.strip():
         tmp_dir = tempfile.mkdtemp()
