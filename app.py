@@ -968,7 +968,7 @@ if st.session_state.phase == "form":
         )
         language = st.radio(
             t("report_lang_label"),
-            options=["English", "한국어"],
+            options=["한국어", "English"],
             horizontal=True,
             help="Choose the language for the entire analysis and investment memo.",
         )
