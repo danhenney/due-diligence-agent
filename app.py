@@ -892,7 +892,7 @@ for key, default in [
     ("viewing_job", None),      # which job the running/results screen is showing
     ("company", ""),
     ("history_pdf_cache", {}),
-    ("ui_lang", "en"),
+    ("ui_lang", "ko"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
