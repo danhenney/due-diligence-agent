@@ -12,6 +12,10 @@ import anthropic
 from config import ANTHROPIC_API_KEY, MODEL_NAME, MAX_TOKENS
 from tools.executor import execute_tool_call
 
+# ── Context-window safety ─────────────────────────────────────────────────────
+_MAX_CONTEXT_CHARS = 550_000  # ~160K tokens (Korean ≈ 3.5 chars/token)
+_MAX_TOOL_RESULT_CHARS = 4_000  # cap each individual tool result
+
 _client: anthropic.Anthropic | None = None
 
 # ── Per-thread token usage accumulator ───────────────────────────────────────
@@ -37,6 +41,46 @@ def _get_client() -> anthropic.Anthropic:
     if _client is None:
         _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     return _client
+
+
+def _estimate_chars(system: str, messages: list[dict]) -> int:
+    """Rough character count of the full prompt (system + messages)."""
+    total = len(system)
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            total += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    total += len(str(block.get("content", "")))
+                    total += len(str(block.get("text", "")))
+                    total += len(json.dumps(block.get("input", {}), ensure_ascii=False)) if "input" in block else 0
+                else:
+                    total += len(str(block))
+    return total
+
+
+def _trim_oldest_tool_results(messages: list[dict], system: str) -> None:
+    """Trim tool result contents in-place, oldest first, until under budget."""
+    while _estimate_chars(system, messages) > _MAX_CONTEXT_CHARS:
+        trimmed_any = False
+        for msg in messages:
+            content = msg.get("content", [])
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                c = block.get("content", "")
+                if isinstance(c, str) and len(c) > 200:
+                    block["content"] = c[:200] + "\n[…truncated to fit context window]"
+                    trimmed_any = True
+                    break  # re-check total after each trim
+            if trimmed_any:
+                break
+        if not trimmed_any:
+            break  # nothing left to trim
 
 
 def _create_with_retry(client: anthropic.Anthropic, max_retries: int = 5, **kwargs) -> Any:
@@ -115,6 +159,11 @@ def run_agent(
     messages: list[dict] = [{"role": "user", "content": user_message}]
 
     for _ in range(max_iterations):
+        # Safety net: trim OLD tool results if context is too large.
+        # This only truncates previous tool results (search data etc.),
+        # never the user's initial message or agent output text.
+        _trim_oldest_tool_results(messages, system_prompt)
+
         kwargs: dict[str, Any] = {
             "model":      MODEL_NAME,
             "max_tokens": max_tokens or MAX_TOKENS,
@@ -147,6 +196,9 @@ def run_agent(
                     result = execute_tool_call(tb.name, tb.input)
                 except Exception as exc:
                     result = json.dumps({"error": str(exc)})
+                # Cap each tool result to prevent context blowup
+                if isinstance(result, str) and len(result) > _MAX_TOOL_RESULT_CHARS:
+                    result = result[:_MAX_TOOL_RESULT_CHARS] + "\n[…truncated]"
                 tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": tb.id,

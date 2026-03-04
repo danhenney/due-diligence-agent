@@ -11,6 +11,7 @@ from agents.context import (
     slim_tech, slim_legal_regulatory, slim_team,
     slim_ra_synthesis, slim_risk_assessment, slim_strategic_insight,
     slim_review, slim_critique, slim_dd_questions, slim_sources, compact,
+    _deep_trim,
 )
 from tools.executor import get_tools_for_agent
 
@@ -126,12 +127,16 @@ def run(state: DueDiligenceState) -> dict:
     })
 
     report_structure = state.get("report_structure") or {}
-    structure_json = compact(report_structure) if report_structure else "No structure provided."
+    # Slim the report structure to prevent context blowup
+    if report_structure:
+        structure_json = compact(_deep_trim(report_structure, max_str=200, max_list=5))
+    else:
+        structure_json = "No structure provided."
 
     today = date.today().isoformat()
 
-    # Collect and format aggregated sources
-    all_sources = _collect_all_sources(state)
+    # Collect and format aggregated sources (cap at 20 to limit context)
+    all_sources = _collect_all_sources(state)[:20]
     sources_section = ""
     if all_sources:
         source_lines = "\n".join(
