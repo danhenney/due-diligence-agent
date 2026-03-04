@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 from typing import Annotated, TypedDict
 from langgraph.graph.message import add_messages
