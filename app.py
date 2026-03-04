@@ -468,32 +468,34 @@ def t(key: str, *args, **kwargs) -> str:
 
 _NODE_LABELS_EN = {
     "input_processor":    "🔍 Processing inputs",
-    "phase1_parallel":    "📊 Phase 1 — 5 research agents ran in parallel",
+    "phase1_parallel":    "📊 Phase 1 — 6 research agents in parallel",
     "phase1_aggregator":  "✅ Phase 1 aggregated",
-    "phase1_check":       "🎯 Phase 1 quality check — scoring & revising agents",
-    "phase2_parallel":    "📈 Phase 2 — 4 analysis agents ran in parallel",
+    "phase2_parallel":    "📈 Phase 2 — R&A Synthesis + Risk Assessment in parallel",
+    "strategic_insight":  "🎯 Strategic Insight",
     "phase2_aggregator":  "✅ Phase 2 aggregated",
-    "phase2_check":       "🎯 Phase 2 quality check — scoring & revising agents",
-    "fact_checker":       "🔎 Fact-checking all claims",
-    "stress_test":        "⚡ Stress-testing downside scenarios",
-    "completeness":       "📋 Coverage & completeness review",
-    "phase3_check":       "🎯 Phase 3 quality check — revisions + final synthesis",
-    "final_report_agent": "📝 Writing investment memo",
+    "review_agent":       "🔎 Review Agent — verifying claims",
+    "critique_agent":     "📋 Critique Agent — scoring quality",
+    "selective_rerun":    "🔄 Selective re-run of weak agents",
+    "phase1_restart":     "🔄 Full Phase 1 restart",
+    "dd_questions":       "❓ DD Questions",
+    "report_structure":   "📐 Report Structure",
+    "report_writer":      "📝 Writing investment memo",
 }
 
 _NODE_LABELS_KO = {
     "input_processor":    "🔍 입력 처리 중",
-    "phase1_parallel":    "📊 1단계 — 리서치 에이전트 5개 병렬 실행",
+    "phase1_parallel":    "📊 1단계 — 리서치 에이전트 6개 병렬 실행",
     "phase1_aggregator":  "✅ 1단계 집계 완료",
-    "phase1_check":       "🎯 1단계 품질 검토 — 에이전트 평가 및 수정",
-    "phase2_parallel":    "📈 2단계 — 분석 에이전트 4개 병렬 실행",
+    "phase2_parallel":    "📈 2단계 — R&A 종합 + 리스크 평가 병렬 실행",
+    "strategic_insight":  "🎯 전략적 인사이트",
     "phase2_aggregator":  "✅ 2단계 집계 완료",
-    "phase2_check":       "🎯 2단계 품질 검토 — 에이전트 평가 및 수정",
-    "fact_checker":       "🔎 모든 주장 팩트체크",
-    "stress_test":        "⚡ 하방 시나리오 스트레스 테스트",
-    "completeness":       "📋 커버리지 & 완성도 검토",
-    "phase3_check":       "🎯 3단계 품질 검토 — 수정 + 최종 종합",
-    "final_report_agent": "📝 투자 메모 작성 중",
+    "review_agent":       "🔎 검토 에이전트 — 주장 검증",
+    "critique_agent":     "📋 비평 에이전트 — 품질 채점",
+    "selective_rerun":    "🔄 약한 에이전트 선택적 재실행",
+    "phase1_restart":     "🔄 1단계 전체 재시작",
+    "dd_questions":       "❓ DD 질문서",
+    "report_structure":   "📐 보고서 구조",
+    "report_writer":      "📝 투자 메모 작성 중",
 }
 
 # Weighted % of total runtime each node typically consumes (must sum to 100)
@@ -1124,9 +1126,9 @@ if st.session_state.phase == "form":
             qi_start = qi.get("start_time") or time.time()
             qi_elapsed = time.time() - qi_start
 
-            completed_w = sum(NODE_WEIGHTS.get(n, 0) for n in qi_progress)
+            completed_w = sum(NODE_WEIGHTS.get(n, 0) for n in set(qi_progress))
             total_w = sum(NODE_WEIGHTS.values())
-            qi_pct = int(completed_w / total_w * 100) if total_w else 0
+            qi_pct = min(int(completed_w / total_w * 100), 100) if total_w else 0
 
             # ETA
             frac = completed_w / total_w if total_w else 0
@@ -1354,9 +1356,11 @@ elif st.session_state.phase == "running":
         elapsed_sec = time.time() - start_time
 
         # ── Progress calculation ───────────────────────────────────────────
-        completed_weight = sum(NODE_WEIGHTS.get(n, 0) for n in progress)
+        # Use set so feedback-loop reruns don't double-count weights
+        unique_nodes = set(progress)
+        completed_weight = sum(NODE_WEIGHTS.get(n, 0) for n in unique_nodes)
         total_weight     = sum(NODE_WEIGHTS.values())
-        pct = completed_weight / total_weight  # 0.0 → 1.0
+        pct = min(completed_weight / total_weight, 1.0)  # cap at 100%
 
         # Elapsed + estimated remaining
         def _fmt_time(seconds: float) -> str:
@@ -1396,23 +1400,33 @@ elif st.session_state.phase == "running":
         st.markdown("")
 
         # ── Completed steps ────────────────────────────────────────────────
+        _PHASE1_AGENTS = [
+            "market_analysis", "competitor_analysis", "financial_analysis",
+            "tech_analysis", "legal_regulatory", "team_analysis",
+        ]
+        _PHASE2_AGENTS = ["ra_synthesis", "risk_assessment"]
+
         for node in progress:
+            # Skip non-node entries (critique_router:pass, budget_cap:*, etc.)
+            if ":" in node:
+                route_label = node.split(":", 1)[1]
+                st.write(f"↳ {route_label}")
+                continue
+
             label = _node_labels.get(node, node.replace("_", " ").title())
-            # Show per-node cost for steps that use the LLM
-            if node in ("phase1_parallel", "phase2_parallel"):
-                phase_agents = (
-                    ["financial_analyst","market_research","legal_risk","management_team","tech_product"]
-                    if node == "phase1_parallel" else
-                    ["bull_case","bear_case","valuation","red_flag"]
-                )
-                phase_cost = sum(token_usage.get(a, {}).get("cost_usd", 0) for a in phase_agents)
+            # Show per-phase cost for parallel steps
+            if node == "phase1_parallel":
+                phase_cost = sum(token_usage.get(a, {}).get("cost_usd", 0) for a in _PHASE1_AGENTS)
                 st.write(f"✓ {label}  —  ${phase_cost:.4f}")
-            elif node not in ("input_processor", "phase1_aggregator", "phase2_aggregator"):
+            elif node == "phase2_parallel":
+                phase_cost = sum(token_usage.get(a, {}).get("cost_usd", 0) for a in _PHASE2_AGENTS)
+                st.write(f"✓ {label}  —  ${phase_cost:.4f}")
+            elif node not in ("input_processor", "phase1_aggregator", "phase2_aggregator", "phase1_restart"):
                 node_cost = token_usage.get(node, {}).get("cost_usd", 0)
                 if node_cost:
-                    st.write(f"✓ {_node_labels.get(node, node)}  —  ${node_cost:.4f}")
+                    st.write(f"✓ {label}  —  ${node_cost:.4f}")
                 else:
-                    st.write(f"✓ {_node_labels.get(node, node)}")
+                    st.write(f"✓ {label}")
             else:
                 st.write(f"✓ {label}")
 
@@ -1595,7 +1609,7 @@ elif st.session_state.phase == "history":
                 f"<span style='{style};padding:3px 12px;border-radius:8px;"
                 f"font-weight:700;font-size:0.85rem'>{label}</span>"
             )
-            col_name, col_rec, col_date, col_dl, col_detail = st.columns([2.5, 1, 1.5, 0.8, 0.8])
+            col_name, col_rec, col_date, col_dl, col_view = st.columns([2.5, 1, 1.5, 0.8, 0.8])
             with col_name:
                 st.markdown(f"**{entry.get('company', '—')}**")
             with col_rec:
@@ -1626,19 +1640,23 @@ elif st.session_state.phase == "history":
                     )
                 else:
                     st.caption(t("pdf_unavail"))
-            with col_detail:
-                if st.button(t("view_details_btn"), key=f"det_{job_id}", use_container_width=True):
-                    st.session_state.history_detail_job = job_id
+            with col_view:
+                if st.button(t("view_details_btn"), key=f"view_{job_id}", use_container_width=True):
+                    # Load full job from Supabase and navigate to results screen
+                    _hist_job = read_job(job_id)
+                    _hist_pdf = pdf_bytes or b""
+                    st.session_state.results[job_id] = {
+                        "result": {
+                            "final_report":   _hist_job.get("final_report", ""),
+                            "recommendation": _hist_job.get("recommendation", "WATCH"),
+                            "token_usage":    _hist_job.get("token_usage", {}),
+                        },
+                        "pdf_bytes": _hist_pdf,
+                        "pptx_path": _hist_job.get("pptx_path", ""),
+                        "company": _hist_job.get("company") or entry.get("company", ""),
+                        "agent_outputs": _hist_job.get("agent_outputs") or {},
+                    }
+                    st.session_state.viewing_job = job_id
+                    st.session_state.phase = "results"
                     st.rerun()
-
-            # Show agent outputs inline if this entry is the selected detail
-            if st.session_state.get("history_detail_job") == job_id:
-                _hist_job = read_job(job_id)
-                _hist_ao = _hist_job.get("agent_outputs") or {}
-                if _hist_ao:
-                    st.markdown(f"#### {t('agent_outputs_heading')}")
-                    _render_agent_outputs(_hist_ao, st.session_state.get("ui_lang", "en"))
-                else:
-                    st.info(t("no_agent_outputs"))
-
             st.divider()
