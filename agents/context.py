@@ -129,6 +129,80 @@ def slim_dd_questions(r: Any) -> dict:
     return d
 
 
+# ── Rich helpers (report_writer only) ─────────────────────────────────────────
+# The report_writer has NO tools → no accumulated conversation → safe to give
+# more data.  These use 600-char strings and 5-item lists instead of 300/3.
+
+def _pick_rich(d: Any, *keys: str) -> dict:
+    """Like _pick but with generous trim limits for the report writer."""
+    if not isinstance(d, dict):
+        return {"data": str(d)[:800]} if d else {}
+    result = {k: d[k] for k in keys if k in d}
+    if not result and "raw" in d:
+        return {"raw_analysis": str(d["raw"])[:3000]}
+    return _deep_trim(result, max_str=600, max_list=5)
+
+
+def rich_market_analysis(r: Any) -> dict:
+    d = _pick_rich(r, "summary", "tam", "sam", "som", "cagr",
+                   "red_flags", "strengths", "confidence_score")
+    return d
+
+def rich_competitor(r: Any) -> dict:
+    return _pick_rich(r, "summary", "competitors", "market_share",
+                      "competitive_gaps", "red_flags", "strengths",
+                      "confidence_score")
+
+def rich_financial_analysis(r: Any) -> dict:
+    return _pick_rich(r, "summary", "revenue_trend", "profitability",
+                      "valuation", "red_flags", "strengths",
+                      "confidence_score")
+
+def rich_tech(r: Any) -> dict:
+    return _pick_rich(r, "summary", "core_technologies", "ip_patents",
+                      "tech_maturity", "red_flags", "strengths",
+                      "confidence_score")
+
+def rich_legal_regulatory(r: Any) -> dict:
+    return _pick_rich(r, "summary", "investment_structure_risks",
+                      "business_regulatory_risks", "litigation",
+                      "red_flags", "strengths", "confidence_score")
+
+def rich_team(r: Any) -> dict:
+    return _pick_rich(r, "summary", "leadership_profiles", "key_person_risk",
+                      "red_flags", "strengths", "confidence_score")
+
+def rich_ra_synthesis(r: Any) -> dict:
+    return _pick_rich(r, "summary", "core_investment_arguments",
+                      "attractiveness_scorecard", "confidence_score")
+
+def rich_risk_assessment(r: Any) -> dict:
+    return _pick_rich(r, "summary", "top_risks", "overall_risk_level",
+                      "confidence_score")
+
+def rich_strategic_insight(r: Any) -> dict:
+    d = _pick_rich(r, "summary", "recommendation", "rationale",
+                   "key_conditions", "confidence_score")
+    if isinstance(d.get("rationale"), str) and len(d["rationale"]) > 1000:
+        d["rationale"] = d["rationale"][:1000] + "…"
+    return d
+
+def rich_review(r: Any) -> dict:
+    return _pick_rich(r, "summary", "verified_claims", "contradicted_claims",
+                      "accuracy_assessment", "confidence_score")
+
+def rich_critique(r: Any) -> dict:
+    d = _pick_rich(r, "logic", "completeness", "accuracy",
+                   "narrative_bias", "insight_effectiveness",
+                   "total_score", "feedback", "summary")
+    if isinstance(d.get("feedback"), str) and len(d["feedback"]) > 800:
+        d["feedback"] = d["feedback"][:800] + "…"
+    return d
+
+def rich_dd_questions(r: Any) -> dict:
+    return _pick_rich(r, "unresolved_issues", "dd_questionnaire", "summary")
+
+
 # ── Serializer ────────────────────────────────────────────────────────────────
 
 def compact(data: Any) -> str:

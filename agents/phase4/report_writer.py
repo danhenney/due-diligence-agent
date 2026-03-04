@@ -7,10 +7,10 @@ from datetime import date
 from graph.state import DueDiligenceState
 from agents.base import run_agent
 from agents.context import (
-    slim_market_analysis, slim_competitor, slim_financial_analysis,
-    slim_tech, slim_legal_regulatory, slim_team,
-    slim_ra_synthesis, slim_risk_assessment, slim_strategic_insight,
-    slim_review, slim_critique, slim_dd_questions, slim_sources, compact,
+    rich_market_analysis, rich_competitor, rich_financial_analysis,
+    rich_tech, rich_legal_regulatory, rich_team,
+    rich_ra_synthesis, rich_risk_assessment, rich_strategic_insight,
+    rich_review, rich_critique, rich_dd_questions, compact,
     _deep_trim,
 )
 from tools.executor import get_tools_for_agent
@@ -112,18 +112,18 @@ def _collect_all_sources(state: DueDiligenceState) -> list[dict]:
 
 def run(state: DueDiligenceState) -> dict:
     full_package = compact({
-        "market": slim_market_analysis(state.get("market_analysis")),
-        "competitors": slim_competitor(state.get("competitor_analysis")),
-        "financial": slim_financial_analysis(state.get("financial_analysis")),
-        "tech": slim_tech(state.get("tech_analysis")),
-        "legal": slim_legal_regulatory(state.get("legal_regulatory")),
-        "team": slim_team(state.get("team_analysis")),
-        "ra_synthesis": slim_ra_synthesis(state.get("ra_synthesis")),
-        "risk_assessment": slim_risk_assessment(state.get("risk_assessment")),
-        "strategic_insight": slim_strategic_insight(state.get("strategic_insight")),
-        "review": slim_review(state.get("review_result")),
-        "critique": slim_critique(state.get("critique_result")),
-        "dd_questions": slim_dd_questions(state.get("dd_questions")),
+        "market": rich_market_analysis(state.get("market_analysis")),
+        "competitors": rich_competitor(state.get("competitor_analysis")),
+        "financial": rich_financial_analysis(state.get("financial_analysis")),
+        "tech": rich_tech(state.get("tech_analysis")),
+        "legal": rich_legal_regulatory(state.get("legal_regulatory")),
+        "team": rich_team(state.get("team_analysis")),
+        "ra_synthesis": rich_ra_synthesis(state.get("ra_synthesis")),
+        "risk_assessment": rich_risk_assessment(state.get("risk_assessment")),
+        "strategic_insight": rich_strategic_insight(state.get("strategic_insight")),
+        "review": rich_review(state.get("review_result")),
+        "critique": rich_critique(state.get("critique_result")),
+        "dd_questions": rich_dd_questions(state.get("dd_questions")),
     })
 
     report_structure = state.get("report_structure") or {}
