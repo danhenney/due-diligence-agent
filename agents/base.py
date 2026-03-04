@@ -57,7 +57,7 @@ def run_agent(
     system_prompt: str,
     user_message: str,
     tools: list[dict],
-    max_iterations: int = 6,
+    max_iterations: int = 15,
     language: str = "English",
     max_tokens: int | None = None,
 ) -> dict[str, Any]:
