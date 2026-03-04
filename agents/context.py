@@ -11,7 +11,11 @@ def _pick(d: Any, *keys: str) -> dict:
     """Return only the specified keys from a report dict."""
     if not isinstance(d, dict):
         return {"data": str(d)[:500]} if d else {}
-    return {k: d[k] for k in keys if k in d}
+    result = {k: d[k] for k in keys if k in d}
+    # Preserve raw text if no structured keys matched (agent didn't return JSON)
+    if not result and "raw" in d:
+        return {"raw_analysis": str(d["raw"])[:2000]}
+    return result
 
 
 def slim_sources(sources: Any, max_sources: int = 10) -> list[dict]:
