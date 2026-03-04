@@ -1013,6 +1013,26 @@ def render_agent_card(agent: dict):
             st.markdown(tags, unsafe_allow_html=True)
 
 
+def _render_nested_dict(d: dict, indent: int = 0) -> None:
+    """Render a nested dict as readable markdown paragraphs."""
+    prefix = "  " * indent
+    for k, v in d.items():
+        label = k.replace("_", " ").title()
+        if isinstance(v, dict):
+            st.markdown(f"{prefix}**{label}:**")
+            _render_nested_dict(v, indent + 1)
+        elif isinstance(v, list):
+            st.markdown(f"{prefix}**{label}:**")
+            for item in v:
+                if isinstance(item, dict):
+                    parts = [f"{ik.replace('_', ' ').title()}: {iv}" for ik, iv in item.items() if iv]
+                    st.markdown(f"{prefix}- {' — '.join(parts)}")
+                else:
+                    st.markdown(f"{prefix}- {item}")
+        elif v is not None and v != "":
+            st.markdown(f"{prefix}**{label}:** {v}")
+
+
 def _render_agent_detail(key: str, data: dict) -> None:
     """Render a single agent's output as readable formatted content."""
     if not isinstance(data, dict):
@@ -1115,7 +1135,6 @@ def _render_agent_detail(key: str, data: dict) -> None:
         return
 
     # ── Generic renderer for other agents ──
-    # Show red flags and strengths prominently
     red_flags = data.get("red_flags", [])
     strengths = data.get("strengths", [])
 
@@ -1133,38 +1152,59 @@ def _render_agent_detail(key: str, data: dict) -> None:
     if confidence is not None:
         st.metric("Confidence", f"{confidence:.0%}" if isinstance(confidence, (int, float)) else str(confidence))
 
-    # Render remaining dict fields as structured content
     skip_keys = {"summary", "red_flags", "strengths", "confidence_score", "sources", "raw"}
     for field_key, field_val in data.items():
         if field_key in skip_keys:
             continue
         nice_label = field_key.replace("_", " ").title()
+
         if isinstance(field_val, str):
             st.markdown(f"**{nice_label}:** {field_val}")
-        elif isinstance(field_val, list) and field_val:
-            with st.expander(nice_label):
-                for item in field_val:
-                    if isinstance(item, dict):
-                        parts = [f"**{k.replace('_', ' ').title()}:** {v}" for k, v in item.items() if v]
-                        st.markdown(" | ".join(parts))
-                        st.markdown("---")
-                    else:
-                        st.markdown(f"- {item}")
-        elif isinstance(field_val, dict) and field_val:
-            with st.expander(nice_label):
-                for sub_k, sub_v in field_val.items():
-                    if isinstance(sub_v, dict):
-                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:**")
-                        for kk, vv in sub_v.items():
-                            st.markdown(f"- {kk.replace('_', ' ').title()}: {vv}")
-                    elif isinstance(sub_v, list):
-                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:**")
-                        for li in sub_v:
-                            st.markdown(f"- {li}")
-                    else:
-                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:** {sub_v}")
 
-    # Sources at the bottom
+        elif isinstance(field_val, list) and field_val:
+            # List of dicts → render as table if uniform keys, else as cards
+            if isinstance(field_val[0], dict):
+                # Try table: all items share same keys
+                all_keys = list(field_val[0].keys())
+                uniform = all(set(item.keys()) == set(all_keys) for item in field_val if isinstance(item, dict))
+                if uniform and len(all_keys) <= 8:
+                    st.markdown(f"**{nice_label}:**")
+                    table_data = []
+                    for item in field_val:
+                        row = {}
+                        for k in all_keys:
+                            v = item.get(k, "")
+                            row[k.replace("_", " ").title()] = str(v) if not isinstance(v, str) else v
+                        table_data.append(row)
+                    st.dataframe(table_data, use_container_width=True, hide_index=True)
+                else:
+                    # Non-uniform dicts → render as readable cards
+                    st.markdown(f"**{nice_label}:**")
+                    for item in field_val:
+                        if isinstance(item, dict):
+                            # Use first string value as card title
+                            title_val = ""
+                            for v in item.values():
+                                if isinstance(v, str) and len(v) < 100:
+                                    title_val = v
+                                    break
+                            if title_val:
+                                st.markdown(f"**{title_val}**")
+                            for k, v in item.items():
+                                if v and str(v) != title_val:
+                                    st.markdown(f"- {k.replace('_', ' ').title()}: {v}")
+                            st.markdown("")
+            else:
+                # List of strings
+                st.markdown(f"**{nice_label}:**")
+                for item in field_val:
+                    st.markdown(f"- {item}")
+
+        elif isinstance(field_val, dict) and field_val:
+            st.markdown(f"**{nice_label}:**")
+            _render_nested_dict(field_val)
+
+    # Sources at bottom
     sources = data.get("sources", [])
     if sources:
         with st.expander("Sources"):
@@ -1173,10 +1213,7 @@ def _render_agent_detail(key: str, data: dict) -> None:
                     label = src.get("label", src.get("url", ""))
                     url = src.get("url", "")
                     tool = src.get("tool", "")
-                    if url:
-                        st.markdown(f"- [{label}]({url}) ({tool})")
-                    else:
-                        st.markdown(f"- {label} ({tool})")
+                    st.markdown(f"- [{label}]({url}) ({tool})" if url else f"- {label} ({tool})")
                 else:
                     st.markdown(f"- {src}")
 
