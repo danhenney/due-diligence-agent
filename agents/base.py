@@ -94,6 +94,15 @@ def run_agent(
         )
         system_prompt = system_prompt + fallback_note
 
+        budget_note = (
+            "\n\nSEARCH BUDGET: You have a LIMITED number of web searches. "
+            "Be strategic — plan your searches before calling tools. "
+            "Aim for 4-6 total search calls maximum. "
+            "Combine related queries into single broader searches. "
+            "Do NOT search for the same topic twice with slightly different wording."
+        )
+        system_prompt = system_prompt + budget_note
+
     if language.lower() != "english":
         system_prompt = (
             system_prompt
