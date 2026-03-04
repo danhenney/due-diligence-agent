@@ -87,7 +87,10 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         ],
         # Phase 2 — Synthesis (no tools, work from Phase 1 data)
         "ra_synthesis": [],
-        "risk_assessment": [],
+        "risk_assessment": [
+            tavily_tools.WEB_SEARCH_TOOL,
+            tavily_tools.NEWS_SEARCH_TOOL,
+        ],
         "strategic_insight": [],
         # Phase 3 — Review & Critique
         "review_agent": [
