@@ -95,7 +95,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         tools=get_tools_for_agent("competitor_analysis"),
-        max_tokens=4096,
+        max_tokens=8096,
         language=state.get("language", "English"),
     )
 
