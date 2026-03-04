@@ -1033,8 +1033,15 @@ def _render_nested_dict(d: dict, indent: int = 0) -> None:
             st.markdown(f"{prefix}**{label}:** {v}")
 
 
-def _render_agent_detail(key: str, data: dict) -> None:
+def _render_agent_detail(key: str, data) -> None:
     """Render a single agent's output as readable formatted content."""
+    # Safety: parse JSON string if Supabase returned it as string
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except (json.JSONDecodeError, ValueError):
+            st.markdown(data)
+            return
     if not isinstance(data, dict):
         st.json(data)
         return
@@ -1218,9 +1225,14 @@ def _render_agent_detail(key: str, data: dict) -> None:
                     st.markdown(f"- {src}")
 
 
-def _render_agent_outputs(agent_outputs: dict, lang: str = "en") -> None:
+def _render_agent_outputs(agent_outputs, lang: str = "en") -> None:
     """Render phase-grouped expanders for each agent's output in readable format."""
-    if not agent_outputs:
+    if isinstance(agent_outputs, str):
+        try:
+            agent_outputs = json.loads(agent_outputs)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    if not agent_outputs or not isinstance(agent_outputs, dict):
         st.info(t("no_agent_outputs"))
         return
 
