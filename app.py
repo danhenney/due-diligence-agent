@@ -1657,11 +1657,33 @@ elif st.session_state.phase == "running":
                 st.write(f"✓ {label}")
 
         # ── Current step spinner ───────────────────────────────────────────
-        completed_set = set(progress)
-        for node in _node_labels:
-            if node not in completed_set:
-                st.write(f"⏳ {_node_labels[node]}…")
+        # Map: after this node completes, what runs next?
+        _NEXT_STEP = {
+            "input_processor":    "phase1_parallel",
+            "phase1_parallel":    "phase1_aggregator",
+            "phase1_aggregator":  "phase2_parallel",
+            "phase2_parallel":    "strategic_insight",
+            "strategic_insight":  "phase2_aggregator",
+            "phase2_aggregator":  "review_agent",
+            "review_agent":       "critique_agent",
+            "critique_agent":     "dd_questions",       # default if pass
+            "selective_rerun":    "review_agent",       # second review
+            "phase1_restart":     "phase1_parallel",    # full restart
+            "dd_questions":       "report_structure",
+            "report_structure":   "report_writer",
+        }
+        last_real = ""
+        for n in reversed(progress):
+            if ":" not in n:  # skip critique_router:conditional etc
+                last_real = n
                 break
+        next_node = _NEXT_STEP.get(last_real, "")
+        if next_node and next_node in _node_labels:
+            st.write(f"⏳ {_node_labels[next_node]}…")
+        elif last_real == "report_writer":
+            st.write("⏳ Generating documents…")
+        else:
+            st.write("⏳ Processing…")
 
         # Poll every 3 seconds
         time.sleep(3)
