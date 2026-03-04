@@ -60,6 +60,7 @@ def run_agent(
     max_iterations: int = 10,
     language: str = "English",
     max_tokens: int | None = None,
+    return_raw_text: bool = False,
 ) -> dict[str, Any]:
     """Run an Anthropic agentic loop with tool use.
 
@@ -159,6 +160,8 @@ def run_agent(
     else:
         final_text = "Agent exceeded maximum iterations without completing."
 
+    if return_raw_text:
+        return {"raw": final_text}
     return _parse_json_response(final_text)
 
 

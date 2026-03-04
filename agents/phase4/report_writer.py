@@ -174,14 +174,10 @@ def run(state: DueDiligenceState) -> dict:
         max_iterations=5,
         max_tokens=32000,
         language=state.get("language", "English"),
+        return_raw_text=True,  # Don't parse as JSON — output is markdown
     )
 
-    # The result may be {"raw": "<full memo text>"} or parsed JSON
-    if "raw" in result:
-        memo_text = result["raw"]
-    else:
-        memo_text = json.dumps(result, indent=2)
-
+    memo_text = result.get("raw", "")
     recommendation = _extract_recommendation(memo_text)
 
     return {
