@@ -300,8 +300,7 @@ def selective_rerun(state: DueDiligenceState) -> dict:
                 merged.update(result)
             except Exception as exc:
                 log.warning("Selective rerun: %s failed: %s", agent_name, exc)
-                merged.setdefault("errors", [])
-                merged["errors"] = [f"selective_rerun {agent_name} failed: {exc}"]
+                merged.setdefault("errors", []).append(f"selective_rerun {agent_name} failed: {exc}")
 
     return merged
 

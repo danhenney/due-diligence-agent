@@ -202,28 +202,17 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(strategic_insight_node, "strategic_insight")
         _step(phase2_aggregator,      "phase2_aggregator")
 
-        # Phase 3 with feedback loop
-        max_loops = 2  # safety cap
-        for _loop in range(max_loops):
-            _step(review_agent_node,   "review_agent")
-            _step(critique_agent_node, "critique_agent")
+        # Phase 3 — review + critique, with at most 1 rerun
+        _step(review_agent_node,   "review_agent")
+        _step(critique_agent_node, "critique_agent")
 
-            route = critique_router(state)
-            progress.append(f"critique_router:{route}")
-            update_job(job_id, {"progress": progress.copy()})
+        route = critique_router(state)
+        progress.append(f"critique_router:{route}")
+        update_job(job_id, {"progress": progress.copy()})
 
-            if route == "pass":
-                break
-
-            # Skip feedback reruns if over budget — proceed with what we have
-            if _over_budget():
-                progress.append("budget_cap:skipping_rerun")
-                update_job(job_id, {"progress": progress.copy()})
-                break
-
+        if route != "pass" and not _over_budget():
             if route == "conditional":
                 _step(selective_rerun, "selective_rerun")
-                # loop back to review_agent
             elif route == "fail":
                 _step(phase1_restart, "phase1_restart")
                 _step(phase1_parallel, "phase1_parallel")
@@ -231,7 +220,13 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 _step(phase2_parallel, "phase2_parallel")
                 _step(strategic_insight_node, "strategic_insight")
                 _step(phase2_aggregator, "phase2_aggregator")
-                # loop back to review_agent
+
+            # Second review after rerun — always proceed regardless of score
+            _step(review_agent_node,   "review_agent")
+            _step(critique_agent_node, "critique_agent")
+            route2 = critique_router(state)
+            progress.append(f"critique_router:{route2}")
+            update_job(job_id, {"progress": progress.copy()})
 
         # Forward path
         _step(dd_questions_node,      "dd_questions")

@@ -108,18 +108,20 @@ def update_job(job_id: str, updates: dict) -> None:
 
     try:
         sb.table("jobs").upsert(row, on_conflict="id").execute()
-    except Exception:
-        # Column might not exist in DB — strip unknown/new columns and retry
-        # Remove one column at a time until it works
-        optional_cols = ["agent_outputs", "docx_path", "pptx_path", "company"]
-        for col in optional_cols:
-            if col in row:
-                row.pop(col)
+    except Exception as first_err:
+        err_msg = str(first_err).lower()
+        # Only strip columns if the error is column-related (schema mismatch)
+        if "column" in err_msg or "schema" in err_msg or "could not find" in err_msg:
+            optional_cols = ["agent_outputs", "docx_path", "pptx_path", "company"]
+            for col in optional_cols:
+                row.pop(col, None)
             try:
                 sb.table("jobs").upsert(row, on_conflict="id").execute()
                 return
             except Exception:
-                continue
+                pass
+        # For any other error (network, etc.), re-raise so caller knows
+        raise
 
 
 def load_queue() -> list[dict]:

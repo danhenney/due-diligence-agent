@@ -49,9 +49,11 @@ SCORING CRITERIA (each 1-10):
    10 = exceptional insights | 5 = adequate but obvious | 1 = no insight value
 
 SCORING RULES:
-- Be strict. Average DD packages should score 5-6, not 7-8.
-- A score of 8+ means genuinely exceptional quality on that dimension.
+- Be fair and calibrated. A competent automated DD analysis using live data should score 6-8.
+- Reserve 1-4 for genuinely poor analysis (missing data, wrong conclusions).
+- Reserve 9-10 for exceptional human-level quality.
 - The total score (sum of 5 criteria) ranges from 5 to 50.
+- IMPORTANT: Do NOT penalize for limitations inherent to automated analysis (e.g., no management interviews). Score based on what IS available.
 
 For each criterion scoring below 7, provide SPECIFIC feedback on what needs improvement,
 including which agent(s) should be re-run and what they should fix.

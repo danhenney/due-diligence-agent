@@ -40,14 +40,16 @@ def _get_client() -> anthropic.Anthropic:
 
 
 def _create_with_retry(client: anthropic.Anthropic, max_retries: int = 5, **kwargs) -> Any:
-    """Call messages.create with exponential backoff on rate limit errors."""
-    for attempt in range(max_retries):
+    """Call messages API with streaming + exponential backoff on rate limit errors."""
+    for attempt in range(max_retries + 1):
         try:
-            return client.messages.create(**kwargs)
+            with client.messages.stream(**kwargs) as stream:
+                return stream.get_final_message()
         except anthropic.RateLimitError:
+            if attempt >= max_retries:
+                raise
             wait = min(60, 10 * (2 ** attempt))  # 10 20 40 60 60 …
             time.sleep(wait)
-    return client.messages.create(**kwargs)  # final attempt, let it raise
 
 
 def run_agent(
