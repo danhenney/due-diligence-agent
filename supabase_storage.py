@@ -88,6 +88,13 @@ def read_job(job_id: str) -> dict:
     return dict(_JOB_DEFAULTS)
 
 
+_JOBS_KNOWN_COLUMNS = {
+    "id", "status", "progress", "error", "start_time", "pdf_path",
+    "recommendation", "final_report", "token_usage", "company",
+    "pptx_path", "docx_path", "agent_outputs",
+}
+
+
 def update_job(job_id: str, updates: dict) -> None:
     """Upsert job state into the jobs table."""
     sb = _get_client()
@@ -102,10 +109,17 @@ def update_job(job_id: str, updates: dict) -> None:
     try:
         sb.table("jobs").upsert(row, on_conflict="id").execute()
     except Exception:
-        # company column may not exist yet — retry without it
-        if "company" in row:
-            row.pop("company")
-            sb.table("jobs").upsert(row, on_conflict="id").execute()
+        # Column might not exist in DB — strip unknown/new columns and retry
+        # Remove one column at a time until it works
+        optional_cols = ["agent_outputs", "docx_path", "pptx_path", "company"]
+        for col in optional_cols:
+            if col in row:
+                row.pop(col)
+            try:
+                sb.table("jobs").upsert(row, on_conflict="id").execute()
+                return
+            except Exception:
+                continue
 
 
 def load_queue() -> list[dict]:
