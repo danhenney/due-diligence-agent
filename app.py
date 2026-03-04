@@ -15,7 +15,9 @@ from supabase_storage import (
     load_queue,
     save_history_entry,
     upload_pdf,
+    upload_file,
     download_pdf,
+    download_file,
 )
 
 # Max concurrent analyses. Additional submissions wait in queue.
@@ -238,33 +240,45 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
 
         # Generate PDF
         pdf_path = pdf_report.generate_pdf(state, job_id, output_dir=tmp_dir)
-        storage_path = upload_pdf(job_id, pdf_path)
+        pdf_storage = upload_pdf(job_id, pdf_path)
 
-        # Generate PPTX
-        pptx_path = None
+        # Generate PPTX + upload to Supabase
+        pptx_storage = None
         try:
             pptx_path = pptx_report.generate_pptx(state, job_id, output_dir=tmp_dir)
+            pptx_storage = upload_file(job_id, pptx_path, folder="pptx")
         except Exception:
-            pass  # PPTX is optional — don't fail the pipeline
+            pass
+
+        # Generate DOCX + upload to Supabase
+        docx_storage = None
+        try:
+            import docx_report
+            docx_path = docx_report.generate_docx(state, job_id, output_dir=tmp_dir)
+            docx_storage = upload_file(job_id, docx_path, folder="docx")
+        except Exception:
+            pass
 
         save_history_entry({
             "id": job_id,
             "company": company,
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "pdf_path": storage_path,
+            "pdf_path": pdf_storage,
         })
 
         # Mark job complete first (critical — must not fail)
         job_update = {
             "status":         "complete",
-            "pdf_path":       storage_path,
+            "pdf_path":       pdf_storage,
             "recommendation": (state.get("recommendation") or "WATCH").upper(),
             "final_report":   state.get("final_report") or "",
             "token_usage":    token_usage,
         }
-        if pptx_path:
-            job_update["pptx_path"] = pptx_path
+        if pptx_storage:
+            job_update["pptx_path"] = pptx_storage
+        if docx_storage:
+            job_update["docx_path"] = docx_storage
         update_job(job_id, job_update)
 
         # Persist agent outputs separately (best-effort — large payload)
@@ -1292,6 +1306,7 @@ elif st.session_state.phase == "running":
             },
             "pdf_bytes": pdf_bytes,
             "pptx_path": job.get("pptx_path", ""),
+            "docx_path": job.get("docx_path", ""),
             "company": job.get("company") or company,
             "agent_outputs": job.get("agent_outputs") or {},
         }
@@ -1475,33 +1490,44 @@ elif st.session_state.phase == "results":
         _lang_toggle("results")
     st.divider()
 
-    col_dl, col_pptx, col_reset, col_hist = st.columns([1, 1, 1, 1])
+    _cname = company.replace(" ", "_")
+    col_dl, col_pptx, col_docx, col_reset, col_hist = st.columns([1, 1, 1, 1, 1])
     with col_dl:
         if _pdf_bytes_result:
             st.download_button(
-                label=t("download_btn"),
+                label="⬇️ PDF",
                 data=_pdf_bytes_result,
-                file_name=f"due_diligence_{company.replace(' ', '_')}.pdf",
+                file_name=f"due_diligence_{_cname}.pdf",
                 mime="application/pdf",
                 type="primary",
                 use_container_width=True,
             )
     with col_pptx:
-        # PPTX download — generate on-the-fly if not cached
-        _pptx_path = _job_data.get("pptx_path") or ""
-        if _pptx_path and os.path.exists(_pptx_path):
-            with open(_pptx_path, "rb") as f:
-                pptx_bytes = f.read()
-            st.download_button(
-                label="Download PPTX",
-                data=pptx_bytes,
-                file_name=f"due_diligence_{company.replace(' ', '_')}.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                use_container_width=True,
-            )
+        _pptx_storage = _job_data.get("pptx_path") or ""
+        if _pptx_storage:
+            _pptx_bytes = download_file(_pptx_storage)
+            if _pptx_bytes:
+                st.download_button(
+                    label="⬇️ PPTX",
+                    data=_pptx_bytes,
+                    file_name=f"due_diligence_{_cname}.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    use_container_width=True,
+                )
+    with col_docx:
+        _docx_storage = _job_data.get("docx_path") or ""
+        if _docx_storage:
+            _docx_bytes = download_file(_docx_storage)
+            if _docx_bytes:
+                st.download_button(
+                    label="⬇️ DOCX",
+                    data=_docx_bytes,
+                    file_name=f"due_diligence_{_cname}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True,
+                )
     with col_reset:
         if st.button(t("analyze_another_btn"), use_container_width=True):
-            # Remove this completed job from active list but keep others
             if _viewing in st.session_state.active_jobs:
                 st.session_state.active_jobs.remove(_viewing)
             st.session_state.viewing_job = None
@@ -1653,6 +1679,7 @@ elif st.session_state.phase == "history":
                         },
                         "pdf_bytes": _hist_pdf,
                         "pptx_path": _hist_job.get("pptx_path", ""),
+                        "docx_path": _hist_job.get("docx_path", ""),
                         "company": _hist_job.get("company") or entry.get("company", ""),
                         "agent_outputs": _hist_job.get("agent_outputs") or {},
                     }

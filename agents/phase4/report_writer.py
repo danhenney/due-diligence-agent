@@ -21,6 +21,8 @@ Report Structure agent.
 
 Your task: write a comprehensive, insight-driven investment memo in Markdown format.
 This is NOT a summary — it's the definitive document for the investment committee.
+TARGET LENGTH: 20-30 pages (8,000-15,000 words). Be thorough. Each section should have
+multiple paragraphs with specific data points, comparisons, and analysis — not just bullet points.
 
 WRITING PRINCIPLES:
 1. INSIGHT-DRIVEN: Not just facts — provide analysis, opinions, and investment implications
@@ -170,7 +172,7 @@ def run(state: DueDiligenceState) -> dict:
         user_message=user_message,
         tools=get_tools_for_agent("report_writer"),  # no tools
         max_iterations=5,
-        max_tokens=16000,
+        max_tokens=32000,
         language=state.get("language", "English"),
     )
 

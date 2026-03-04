@@ -163,29 +163,48 @@ def save_history_entry(entry: dict) -> None:
     sb.table("history").upsert(entry, on_conflict="id").execute()
 
 
-# ── PDF storage ──────────────────────────────────────────────────────────────
+# ── File storage ─────────────────────────────────────────────────────────────
 
-def upload_pdf(job_id: str, local_path: str) -> str:
-    """Upload a PDF to Supabase Storage and return the storage path."""
+_MIME_TYPES = {
+    ".pdf":  "application/pdf",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+def upload_file(job_id: str, local_path: str, folder: str = "pdfs") -> str:
+    """Upload a file to Supabase Storage and return the storage path."""
     sb = _get_client()
-    storage_path = f"pdfs/{job_id}.pdf"
+    ext = os.path.splitext(local_path)[1].lower()
+    storage_path = f"{folder}/{job_id}{ext}"
+    content_type = _MIME_TYPES.get(ext, "application/octet-stream")
 
     with open(local_path, "rb") as f:
-        pdf_bytes = f.read()
+        file_bytes = f.read()
 
     sb.storage.from_("reports").upload(
         storage_path,
-        pdf_bytes,
-        file_options={"content-type": "application/pdf", "upsert": "true"},
+        file_bytes,
+        file_options={"content-type": content_type, "upsert": "true"},
     )
     return storage_path
 
 
-def download_pdf(storage_path: str) -> bytes | None:
-    """Download PDF bytes from Supabase Storage. Returns None on failure."""
+def upload_pdf(job_id: str, local_path: str) -> str:
+    """Upload a PDF to Supabase Storage and return the storage path."""
+    return upload_file(job_id, local_path, folder="pdfs")
+
+
+def download_file(storage_path: str) -> bytes | None:
+    """Download file bytes from Supabase Storage. Returns None on failure."""
     try:
         sb = _get_client()
         data = sb.storage.from_("reports").download(storage_path)
         return data
     except Exception:
         return None
+
+
+def download_pdf(storage_path: str) -> bytes | None:
+    """Download PDF bytes from Supabase Storage. Returns None on failure."""
+    return download_file(storage_path)
