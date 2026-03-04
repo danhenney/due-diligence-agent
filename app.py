@@ -1013,8 +1013,176 @@ def render_agent_card(agent: dict):
             st.markdown(tags, unsafe_allow_html=True)
 
 
+def _render_agent_detail(key: str, data: dict) -> None:
+    """Render a single agent's output as readable formatted content."""
+    if not isinstance(data, dict):
+        st.json(data)
+        return
+
+    # Check for failed agent
+    raw = data.get("raw", "")
+    if "exceeded maximum iterations" in str(raw):
+        st.warning("This agent did not complete its analysis.")
+        return
+    if raw and not any(k for k in data if k != "raw"):
+        st.markdown(raw)
+        return
+
+    # Summary always first
+    if "summary" in data:
+        st.markdown(f"**Summary:** {data['summary']}")
+        st.divider()
+
+    # ── Critique agent: show scores prominently ──
+    if key == "critique_result":
+        score_keys = ["logic", "completeness", "accuracy", "narrative_bias", "insight_effectiveness"]
+        score_labels = {
+            "logic": "Logic", "completeness": "Completeness", "accuracy": "Accuracy",
+            "narrative_bias": "Narrative Bias", "insight_effectiveness": "Insight Effectiveness",
+        }
+        cols = st.columns(len(score_keys))
+        for col, sk in zip(cols, score_keys):
+            val = data.get(sk, "?")
+            col.metric(score_labels.get(sk, sk), f"{val}/10")
+        total = data.get("total_score", "?")
+        st.metric("Total Score", f"{total}/50")
+        for fb in data.get("feedback", []):
+            with st.expander(f"{fb.get('criterion', '?')} — {fb.get('score', '?')}/10"):
+                st.markdown(f"**Assessment:** {fb.get('assessment', 'N/A')}")
+                if fb.get("weak_agents"):
+                    st.markdown(f"**Weak agents:** {', '.join(fb['weak_agents'])}")
+                for imp in fb.get("specific_improvements", []):
+                    st.markdown(f"- {imp}")
+        return
+
+    # ── Strategic insight: recommendation badge ──
+    if key == "strategic_insight":
+        rec = data.get("recommendation", "")
+        if rec:
+            color = {"INVEST": "green", "WATCH": "orange", "PASS": "red"}.get(rec, "gray")
+            st.markdown(f"### :{color}[{rec}]")
+        if data.get("rationale"):
+            st.markdown(data["rationale"])
+        for section_key, section_label in [("key_arguments_for", "Arguments For"), ("key_arguments_against", "Arguments Against")]:
+            items = data.get(section_key, [])
+            if items:
+                st.markdown(f"**{section_label}:**")
+                for item in items:
+                    st.markdown(f"- {item}")
+        if data.get("key_conditions"):
+            st.markdown("**Key Conditions:**")
+            for cond in data["key_conditions"]:
+                st.markdown(f"- {cond.get('condition', cond) if isinstance(cond, dict) else cond}")
+        return
+
+    # ── Risk assessment: risk matrix table ──
+    if key == "risk_assessment" and data.get("risk_matrix"):
+        level = data.get("overall_risk_level", "")
+        if level:
+            color = {"high": "red", "medium": "orange", "low": "green"}.get(level.lower(), "gray")
+            st.markdown(f"**Overall Risk Level:** :{color}[{level.upper()}]")
+        rows = []
+        for r in data["risk_matrix"]:
+            if isinstance(r, dict):
+                rows.append({
+                    "Risk": r.get("risk", ""),
+                    "Category": r.get("category", ""),
+                    "Probability": r.get("probability", ""),
+                    "Impact": r.get("impact", ""),
+                    "Severity": r.get("severity", ""),
+                })
+        if rows:
+            st.dataframe(rows, use_container_width=True)
+        for tr in data.get("top_risks", []):
+            if isinstance(tr, dict):
+                st.markdown(f"- **{tr.get('risk', '')}** (severity {tr.get('severity', '?')}): {tr.get('why_critical', '')}")
+        return
+
+    # ── DD questions: questionnaire ──
+    if key == "dd_questions":
+        for issue in data.get("unresolved_issues", []):
+            if isinstance(issue, dict):
+                sev = issue.get("severity", "")
+                st.markdown(f"- **[{sev.upper()}]** {issue.get('issue', '')}")
+        if data.get("dd_questionnaire"):
+            st.markdown("**Due Diligence Questions:**")
+            for i, q in enumerate(data["dd_questionnaire"], 1):
+                if isinstance(q, dict):
+                    pri = q.get("priority", "")
+                    st.markdown(f"{i}. **[{pri}]** {q.get('question', '')}")
+                    if q.get("context"):
+                        st.caption(f"   Context: {q['context']}")
+        return
+
+    # ── Generic renderer for other agents ──
+    # Show red flags and strengths prominently
+    red_flags = data.get("red_flags", [])
+    strengths = data.get("strengths", [])
+
+    if strengths:
+        st.markdown("**Strengths:**")
+        for s in strengths:
+            st.markdown(f"- :green[{s}]")
+
+    if red_flags:
+        st.markdown("**Red Flags:**")
+        for r in red_flags:
+            st.markdown(f"- :red[{r}]")
+
+    confidence = data.get("confidence_score")
+    if confidence is not None:
+        st.metric("Confidence", f"{confidence:.0%}" if isinstance(confidence, (int, float)) else str(confidence))
+
+    # Render remaining dict fields as structured content
+    skip_keys = {"summary", "red_flags", "strengths", "confidence_score", "sources", "raw"}
+    for field_key, field_val in data.items():
+        if field_key in skip_keys:
+            continue
+        nice_label = field_key.replace("_", " ").title()
+        if isinstance(field_val, str):
+            st.markdown(f"**{nice_label}:** {field_val}")
+        elif isinstance(field_val, list) and field_val:
+            with st.expander(nice_label):
+                for item in field_val:
+                    if isinstance(item, dict):
+                        parts = [f"**{k.replace('_', ' ').title()}:** {v}" for k, v in item.items() if v]
+                        st.markdown(" | ".join(parts))
+                        st.markdown("---")
+                    else:
+                        st.markdown(f"- {item}")
+        elif isinstance(field_val, dict) and field_val:
+            with st.expander(nice_label):
+                for sub_k, sub_v in field_val.items():
+                    if isinstance(sub_v, dict):
+                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:**")
+                        for kk, vv in sub_v.items():
+                            st.markdown(f"- {kk.replace('_', ' ').title()}: {vv}")
+                    elif isinstance(sub_v, list):
+                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:**")
+                        for li in sub_v:
+                            st.markdown(f"- {li}")
+                    else:
+                        st.markdown(f"**{sub_k.replace('_', ' ').title()}:** {sub_v}")
+
+    # Sources at the bottom
+    sources = data.get("sources", [])
+    if sources:
+        with st.expander("Sources"):
+            for src in sources:
+                if isinstance(src, dict):
+                    label = src.get("label", src.get("url", ""))
+                    url = src.get("url", "")
+                    tool = src.get("tool", "")
+                    if url:
+                        st.markdown(f"- [{label}]({url}) ({tool})")
+                    else:
+                        st.markdown(f"- {label} ({tool})")
+                else:
+                    st.markdown(f"- {src}")
+
+
 def _render_agent_outputs(agent_outputs: dict, lang: str = "en") -> None:
-    """Render phase-grouped expanders for each agent's raw output."""
+    """Render phase-grouped expanders for each agent's output in readable format."""
     if not agent_outputs:
         st.info(t("no_agent_outputs"))
         return
@@ -1023,7 +1191,6 @@ def _render_agent_outputs(agent_outputs: dict, lang: str = "en") -> None:
 
     for phase in _AGENT_OUTPUT_PHASES:
         heading = phase["heading_ko"] if lang == "ko" else phase["heading_en"]
-        # Only show phase heading if at least one agent has output
         phase_keys_with_data = [
             (key, icon) for key, icon in phase["keys"] if key in agent_outputs
         ]
@@ -1034,7 +1201,7 @@ def _render_agent_outputs(agent_outputs: dict, lang: str = "en") -> None:
         for key, icon in phase_keys_with_data:
             label = labels.get(key, key.replace("_", " ").title())
             with st.expander(f"{icon} {label}"):
-                st.json(agent_outputs[key])
+                _render_agent_detail(key, agent_outputs[key])
         st.markdown("")
 
 
