@@ -55,41 +55,42 @@ def run_agent(
     system_prompt: str,
     user_message: str,
     tools: list[dict],
-    max_iterations: int = 10,
+    max_iterations: int = 6,
     language: str = "English",
+    max_tokens: int | None = None,
 ) -> dict[str, Any]:
     """Run an Anthropic agentic loop with tool use.
 
     Handles multi-turn tool calls automatically. Returns the final structured
     response parsed from the last assistant text block, or {"raw": text}.
     """
-    # Inject today's date so the agent knows its training data is stale
-    # and MUST use live tools for any current financial figures.
-    today = datetime.now().strftime("%B %d, %Y")
-    live_data_header = (
-        f"TODAY'S DATE: {today}. "
-        "Your training knowledge has a cutoff of August 2025. "
-        "Any numerical figure that can change over time — stock price, market cap, "
-        "revenue, earnings, analyst ratings, interest rates, competitor metrics — "
-        "MUST be fetched via a live tool call. "
-        "Never quote a financial number from training memory; always verify with a tool.\n\n"
-    )
-    system_prompt = live_data_header + system_prompt
-
-    # Always append the tool-fallback instruction so Claude gracefully
-    # degrades when a data tool hits a quota limit or returns an error.
-    has_web_search = any(t.get("name") == "web_search" for t in tools)
-    fallback_note = (
-        "\n\nTOOL FALLBACK RULE: If any tool call returns an error or a response "
-        "containing '\"error\"', do NOT stop. "
-        + (
-            "Use web_search or news_search to find the same information instead. "
-            if has_web_search else
-            "Skip that data point, note it as unavailable, and continue your analysis. "
+    # Only inject live-data header and tool-fallback note for agents that
+    # have tools — no-tool agents (red_flag, completeness, final_report,
+    # evaluation calls) don't need these, saving ~180 tokens per call.
+    if tools:
+        today = datetime.now().strftime("%B %d, %Y")
+        live_data_header = (
+            f"TODAY'S DATE: {today}. "
+            "Your training knowledge has a cutoff of August 2025. "
+            "Any numerical figure that can change over time — stock price, market cap, "
+            "revenue, earnings, analyst ratings, interest rates, competitor metrics — "
+            "MUST be fetched via a live tool call. "
+            "Never quote a financial number from training memory; always verify with a tool.\n\n"
         )
-        + "Always complete your full analysis regardless of individual tool failures."
-    )
-    system_prompt = system_prompt + fallback_note
+        system_prompt = live_data_header + system_prompt
+
+        has_web_search = any(t.get("name") == "web_search" for t in tools)
+        fallback_note = (
+            "\n\nTOOL FALLBACK RULE: If any tool call returns an error or a response "
+            "containing '\"error\"', do NOT stop. "
+            + (
+                "Use web_search or news_search to find the same information instead. "
+                if has_web_search else
+                "Skip that data point, note it as unavailable, and continue your analysis. "
+            )
+            + "Always complete your full analysis regardless of individual tool failures."
+        )
+        system_prompt = system_prompt + fallback_note
 
     if language.lower() != "english":
         system_prompt = (
@@ -104,7 +105,7 @@ def run_agent(
     for _ in range(max_iterations):
         kwargs: dict[str, Any] = {
             "model":      MODEL_NAME,
-            "max_tokens": MAX_TOKENS,
+            "max_tokens": max_tokens or MAX_TOKENS,
             "system":     system_prompt,
             "messages":   messages,
         }

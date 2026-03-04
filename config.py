@@ -8,6 +8,9 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 MODEL_NAME = "claude-sonnet-4-6"
 MAX_TOKENS = 8096
 
+# Hard cost cap per analysis (USD). Pipeline aborts early if exceeded.
+MAX_COST_PER_ANALYSIS = 5.00
+
 # Search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 

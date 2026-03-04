@@ -97,6 +97,7 @@ def fred_get_series(
             "prior_value":  values[-2]  if len(values) >= 2 else None,
             "min_in_range": min(values) if values else None,
             "max_in_range": max(values) if values else None,
+            "source_url":  f"https://fred.stlouisfed.org/series/{series_id}",
         }
 
     except Exception as exc:

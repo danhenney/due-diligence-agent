@@ -70,6 +70,56 @@ _AGENT_LABELS_KO = {
 # Display order
 _AGENT_ORDER = list(_AGENT_LABELS_EN.keys())
 
+# Keys to collect from pipeline state as agent outputs
+_AGENT_OUTPUT_KEYS = [
+    "market_analysis", "competitor_analysis", "financial_analysis",
+    "tech_analysis", "legal_regulatory", "team_analysis",
+    "ra_synthesis", "risk_assessment", "strategic_insight",
+    "review_result", "critique_result", "dd_questions",
+    "report_structure",
+]
+
+# Phase-grouped layout for rendering agent outputs
+_AGENT_OUTPUT_PHASES = [
+    {
+        "heading_en": "Phase 1: Research & Analysis",
+        "heading_ko": "1단계: 리서치 & 분석",
+        "keys": [
+            ("market_analysis",     "🔍"),
+            ("competitor_analysis", "🏢"),
+            ("financial_analysis",  "💰"),
+            ("tech_analysis",       "🔧"),
+            ("legal_regulatory",    "⚖️"),
+            ("team_analysis",       "👥"),
+        ],
+    },
+    {
+        "heading_en": "Phase 2: Synthesis",
+        "heading_ko": "2단계: 종합",
+        "keys": [
+            ("ra_synthesis",     "📈"),
+            ("risk_assessment",  "⚠️"),
+            ("strategic_insight","🎯"),
+        ],
+    },
+    {
+        "heading_en": "Phase 3: Review & Critique",
+        "heading_ko": "3단계: 검토 & 비평",
+        "keys": [
+            ("review_result",  "✅"),
+            ("critique_result","📝"),
+            ("dd_questions",   "❓"),
+        ],
+    },
+    {
+        "heading_en": "Phase 4: Report",
+        "heading_ko": "4단계: 보고서",
+        "keys": [
+            ("report_structure", "📋"),
+        ],
+    },
+]
+
 
 def _cost_usd(inp: int, out: int) -> float:
     return inp / 1_000_000 * _PRICE_INPUT_PER_M + out / 1_000_000 * _PRICE_OUTPUT_PER_M
@@ -95,6 +145,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         import pdf_report
         import pptx_report
         from agents.base import get_and_reset_usage
+        from config import MAX_COST_PER_ANALYSIS
         from graph.workflow import (
             input_processor, phase1_parallel, phase1_aggregator,
             phase2_parallel, strategic_insight_node, phase2_aggregator,
@@ -109,6 +160,17 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
 
         _NO_LLM_NODES = {"input_processor", "phase1_aggregator", "phase2_aggregator",
                          "phase1_restart"}
+
+        def _total_cost() -> float:
+            return sum(v.get("cost_usd", 0) for v in token_usage.values())
+
+        def _check_budget() -> None:
+            cost = _total_cost()
+            if cost > MAX_COST_PER_ANALYSIS:
+                raise RuntimeError(
+                    f"Cost cap exceeded: ${cost:.2f} > ${MAX_COST_PER_ANALYSIS:.2f} limit. "
+                    f"Pipeline stopped to protect your budget."
+                )
 
         def _step(fn, node_name: str) -> None:
             result = fn(state)
@@ -135,6 +197,9 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 "token_usage": token_usage.copy(),
             })
 
+            # Enforce cost cap after each step
+            _check_budget()
+
         # Main pipeline
         _step(input_processor,        "input_processor")
         _step(phase1_parallel,        "phase1_parallel")
@@ -144,7 +209,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(phase2_aggregator,      "phase2_aggregator")
 
         # Phase 3 with feedback loop
-        max_loops = 3  # safety cap
+        max_loops = 2  # safety cap (reduced from 3 to control cost)
         for _loop in range(max_loops):
             _step(review_agent_node,   "review_agent")
             _step(critique_agent_node, "critique_agent")
@@ -191,6 +256,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             "pdf_path": storage_path,
         })
 
+        # Mark job complete first (critical — must not fail)
         job_update = {
             "status":         "complete",
             "pdf_path":       storage_path,
@@ -201,6 +267,18 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         if pptx_path:
             job_update["pptx_path"] = pptx_path
         update_job(job_id, job_update)
+
+        # Persist agent outputs separately (best-effort — large payload)
+        try:
+            agent_outputs = {}
+            for key in _AGENT_OUTPUT_KEYS:
+                val = state.get(key)
+                if val is not None:
+                    agent_outputs[key] = val
+            if agent_outputs:
+                update_job(job_id, {"agent_outputs": agent_outputs})
+        except Exception:
+            pass  # Don't let agent_outputs failure break the completed job
 
     except Exception as exc:
         update_job(job_id, {"status": "error", "error": str(exc)})
@@ -295,6 +373,9 @@ _UI = {
         "queue_started":        "Started {}s ago",
         "back_to_form_btn":     "← Back to Form",
         "job_picker_label":     "Switch analysis:",
+        "agent_outputs_heading":"📊 Agent Outputs",
+        "no_agent_outputs":     "No individual agent outputs available for this analysis.",
+        "view_details_btn":     "📄 Details",
     },
     "ko": {
         "app_title":            "## 📊 실사 에이전트",
@@ -366,6 +447,9 @@ _UI = {
         "queue_started":        "{}초 전 시작",
         "back_to_form_btn":     "← 입력 폼으로",
         "job_picker_label":     "분석 전환:",
+        "agent_outputs_heading":"📊 에이전트 출력",
+        "no_agent_outputs":     "이 분석에 대한 개별 에이전트 출력이 없습니다.",
+        "view_details_btn":     "📄 상세",
     },
 }
 
@@ -877,6 +961,7 @@ for key, default in [
     ("viewing_job", None),      # which job the running/results screen is showing
     ("company", ""),
     ("history_pdf_cache", {}),
+    ("history_detail_job", None),
     ("ui_lang", "ko"),
 ]:
     if key not in st.session_state:
@@ -916,6 +1001,31 @@ def render_agent_card(agent: dict):
                 f"<span class='source-tag'>{s}</span>" for s in agent["sources"]
             )
             st.markdown(tags, unsafe_allow_html=True)
+
+
+def _render_agent_outputs(agent_outputs: dict, lang: str = "en") -> None:
+    """Render phase-grouped expanders for each agent's raw output."""
+    if not agent_outputs:
+        st.info(t("no_agent_outputs"))
+        return
+
+    labels = _AGENT_LABELS_KO if lang == "ko" else _AGENT_LABELS_EN
+
+    for phase in _AGENT_OUTPUT_PHASES:
+        heading = phase["heading_ko"] if lang == "ko" else phase["heading_en"]
+        # Only show phase heading if at least one agent has output
+        phase_keys_with_data = [
+            (key, icon) for key, icon in phase["keys"] if key in agent_outputs
+        ]
+        if not phase_keys_with_data:
+            continue
+
+        st.markdown(f"**{heading}**")
+        for key, icon in phase_keys_with_data:
+            label = labels.get(key, key.replace("_", " ").title())
+            with st.expander(f"{icon} {label}"):
+                st.json(agent_outputs[key])
+        st.markdown("")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1182,6 +1292,7 @@ elif st.session_state.phase == "running":
             "pdf_bytes": pdf_bytes,
             "pptx_path": job.get("pptx_path", ""),
             "company": job.get("company") or company,
+            "agent_outputs": job.get("agent_outputs") or {},
         }
         st.session_state.history_pdf_cache[job_id] = pdf_bytes
         st.session_state.phase = "results"
@@ -1435,6 +1546,13 @@ elif st.session_state.phase == "results":
     else:
         st.info(t("no_report"))
 
+    # ── Agent Outputs ─────────────────────────────────────────────────────────
+    _ao = _job_data.get("agent_outputs") or {}
+    if _ao:
+        st.divider()
+        st.markdown(f"### {t('agent_outputs_heading')}")
+        _render_agent_outputs(_ao, st.session_state.get("ui_lang", "en"))
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SCREEN 4 — HISTORY
@@ -1478,7 +1596,7 @@ elif st.session_state.phase == "history":
                 f"<span style='{style};padding:3px 12px;border-radius:8px;"
                 f"font-weight:700;font-size:0.85rem'>{label}</span>"
             )
-            col_name, col_rec, col_date, col_dl = st.columns([2.5, 1, 1.5, 1])
+            col_name, col_rec, col_date, col_dl, col_detail = st.columns([2.5, 1, 1.5, 0.8, 0.8])
             with col_name:
                 st.markdown(f"**{entry.get('company', '—')}**")
             with col_rec:
@@ -1509,4 +1627,19 @@ elif st.session_state.phase == "history":
                     )
                 else:
                     st.caption(t("pdf_unavail"))
+            with col_detail:
+                if st.button(t("view_details_btn"), key=f"det_{job_id}", use_container_width=True):
+                    st.session_state.history_detail_job = job_id
+                    st.rerun()
+
+            # Show agent outputs inline if this entry is the selected detail
+            if st.session_state.get("history_detail_job") == job_id:
+                _hist_job = read_job(job_id)
+                _hist_ao = _hist_job.get("agent_outputs") or {}
+                if _hist_ao:
+                    st.markdown(f"#### {t('agent_outputs_heading')}")
+                    _render_agent_outputs(_hist_ao, st.session_state.get("ui_lang", "en"))
+                else:
+                    st.info(t("no_agent_outputs"))
+
             st.divider()

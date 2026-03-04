@@ -70,6 +70,8 @@ def read_job(job_id: str) -> dict:
                 data["progress"] = json.loads(data["progress"])
             if isinstance(data.get("token_usage"), str):
                 data["token_usage"] = json.loads(data["token_usage"])
+            if isinstance(data.get("agent_outputs"), str):
+                data["agent_outputs"] = json.loads(data["agent_outputs"])
 
             # Auto-expire stale jobs
             if data.get("status") in ("running", "queued"):
@@ -93,7 +95,7 @@ def update_job(job_id: str, updates: dict) -> None:
     row.update(updates)
 
     # Ensure JSONB fields are serialized properly
-    for key in ("progress", "token_usage"):
+    for key in ("progress", "token_usage", "agent_outputs"):
         if key in row and not isinstance(row[key], str):
             row[key] = json.dumps(row[key], ensure_ascii=False)
 

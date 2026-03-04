@@ -328,6 +328,71 @@ def _safe_para(text: str, style: ParagraphStyle) -> Paragraph:
         return Paragraph(plain, style)
 
 
+# ── Markdown table helper ─────────────────────────────────────────────────────
+
+def _build_table(table_lines: list[str], styles: dict[str, ParagraphStyle]) -> list:
+    """Convert parsed markdown table lines into a ReportLab Table flowable."""
+    rows = []
+    for line in table_lines:
+        # Split on | and strip; drop empty first/last from leading/trailing |
+        cells = [c.strip() for c in line.split("|")]
+        if cells and cells[0] == "":
+            cells = cells[1:]
+        if cells and cells[-1] == "":
+            cells = cells[:-1]
+        rows.append(cells)
+
+    if not rows:
+        return []
+
+    # Wrap each cell in a Paragraph for word-wrapping
+    header_style = ParagraphStyle(
+        "TableHeader",
+        parent=styles["Body"],
+        fontName=styles["Body"].fontName.replace("Helvetica", "Helvetica-Bold")
+            if "Helvetica" in styles["Body"].fontName else styles["Body"].fontName,
+        fontSize=9,
+        leading=12,
+    )
+    cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["Body"],
+        fontSize=9,
+        leading=12,
+        alignment=TA_LEFT,
+    )
+
+    table_data = []
+    for row_idx, row in enumerate(rows):
+        style = header_style if row_idx == 0 else cell_style
+        table_data.append([_safe_para(_md_inline(c), style) for c in row])
+
+    # Ensure all rows have equal column count
+    max_cols = max(len(r) for r in table_data)
+    for row in table_data:
+        while len(row) < max_cols:
+            row.append(_safe_para("", cell_style))
+
+    # Calculate column widths — distribute available width evenly
+    avail_width = 6.7 * inch  # LETTER minus margins
+    col_widths = [avail_width / max_cols] * max_cols
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND",  (0, 0), (-1, 0), COLOR_CODE_BG),
+        ("FONTSIZE",    (0, 0), (-1, -1), 9),
+        ("TOPPADDING",  (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("GRID",        (0, 0), (-1, -1), 0.5, COLOR_HR),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, COLOR_CODE_BG]),
+        ("VALIGN",      (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    return [Spacer(1, 4), table, Spacer(1, 4)]
+
+
 # ── Markdown parser ───────────────────────────────────────────────────────────
 
 def _parse_markdown(md: str, styles: dict[str, ParagraphStyle]) -> list:
@@ -388,6 +453,19 @@ def _parse_markdown(md: str, styles: dict[str, ParagraphStyle]) -> list:
             flowables.append(_safe_para(f"Recommendation: {rec}", style))
             flowables.append(Spacer(1, 6))
             i += 1
+            continue
+
+        # Markdown table
+        if "|" in line and line.strip().startswith("|"):
+            table_lines = []
+            while i < len(lines) and "|" in lines[i] and lines[i].strip().startswith("|"):
+                stripped = lines[i].strip()
+                # Skip separator rows like |---|---|
+                if not re.match(r"^\|[\s\-:|]+\|$", stripped):
+                    table_lines.append(stripped)
+                i += 1
+            if table_lines:
+                flowables.extend(_build_table(table_lines, styles))
             continue
 
         # Bullet

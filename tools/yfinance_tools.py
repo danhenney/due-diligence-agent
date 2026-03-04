@@ -99,6 +99,7 @@ def yf_get_info(ticker: str) -> dict[str, Any]:
     if price and target and price > 0:
         result["impliedUpsideToTarget"] = round((target - price) / price * 100, 1)
 
+    result["source_url"] = f"https://finance.yahoo.com/quote/{ticker.strip().upper()}"
     return result
 
 
@@ -150,6 +151,7 @@ def yf_get_financials(ticker: str, period: str = "annual") -> dict[str, Any]:
         "income_statement": _df_to_dict(inc, income_rows),
         "balance_sheet":    _df_to_dict(bal, balance_rows),
         "cash_flow":        _df_to_dict(cf,  cashflow_rows),
+        "source_url":       f"https://finance.yahoo.com/quote/{ticker.strip().upper()}/financials",
     }
 
 
@@ -215,6 +217,7 @@ def yf_get_analyst_data(ticker: str) -> dict[str, Any]:
     except Exception:
         pass
 
+    result["source_url"] = f"https://finance.yahoo.com/quote/{ticker.strip().upper()}/analysis"
     return result
 
 
