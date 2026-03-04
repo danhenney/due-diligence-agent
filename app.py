@@ -1047,11 +1047,11 @@ def _render_agent_detail(key: str, data) -> None:
         return
 
     # Check for failed agent
-    raw = data.get("raw", "")
+    raw = data.get("raw", "") or data.get("raw_analysis", "")
     if "exceeded maximum iterations" in str(raw):
         st.warning("This agent did not complete its analysis.")
         return
-    if raw and not any(k for k in data if k != "raw"):
+    if raw and not any(k for k in data if k not in ("raw", "raw_analysis")):
         st.markdown(raw)
         return
 
@@ -1159,7 +1159,7 @@ def _render_agent_detail(key: str, data) -> None:
     if confidence is not None:
         st.metric("Confidence", f"{confidence:.0%}" if isinstance(confidence, (int, float)) else str(confidence))
 
-    skip_keys = {"summary", "red_flags", "strengths", "confidence_score", "sources", "raw"}
+    skip_keys = {"summary", "red_flags", "strengths", "confidence_score", "sources", "raw", "raw_analysis"}
     for field_key, field_val in data.items():
         if field_key in skip_keys:
             continue
