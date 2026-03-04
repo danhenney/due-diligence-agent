@@ -164,13 +164,8 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         def _total_cost() -> float:
             return sum(v.get("cost_usd", 0) for v in token_usage.values())
 
-        def _check_budget() -> None:
-            cost = _total_cost()
-            if cost > MAX_COST_PER_ANALYSIS:
-                raise RuntimeError(
-                    f"Cost cap exceeded: ${cost:.2f} > ${MAX_COST_PER_ANALYSIS:.2f} limit. "
-                    f"Pipeline stopped to protect your budget."
-                )
+        def _over_budget() -> bool:
+            return _total_cost() > MAX_COST_PER_ANALYSIS
 
         def _step(fn, node_name: str) -> None:
             result = fn(state)
@@ -197,9 +192,6 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 "token_usage": token_usage.copy(),
             })
 
-            # Enforce cost cap after each step
-            _check_budget()
-
         # Main pipeline
         _step(input_processor,        "input_processor")
         _step(phase1_parallel,        "phase1_parallel")
@@ -209,7 +201,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         _step(phase2_aggregator,      "phase2_aggregator")
 
         # Phase 3 with feedback loop
-        max_loops = 2  # safety cap (reduced from 3 to control cost)
+        max_loops = 2  # safety cap
         for _loop in range(max_loops):
             _step(review_agent_node,   "review_agent")
             _step(critique_agent_node, "critique_agent")
@@ -220,7 +212,14 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
 
             if route == "pass":
                 break
-            elif route == "conditional":
+
+            # Skip feedback reruns if over budget — proceed with what we have
+            if _over_budget():
+                progress.append("budget_cap:skipping_rerun")
+                update_job(job_id, {"progress": progress.copy()})
+                break
+
+            if route == "conditional":
                 _step(selective_rerun, "selective_rerun")
                 # loop back to review_agent
             elif route == "fail":
