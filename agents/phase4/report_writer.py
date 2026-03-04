@@ -30,7 +30,7 @@ WRITING PRINCIPLES:
 2. DATA-RICH: Include specific numbers, percentages, and figures throughout
 3. BALANCED: Present both bull and bear cases fairly
 4. ACTIONABLE: Every section should help the reader make a decision
-5. STRUCTURED: Follow the report structure provided, using Why/What/How/Risk/Recommendations
+5. STRUCTURED: Follow the 6-section report structure below
 
 THE RECOMMENDATION MUST BE ONE OF:
 - **INVEST**: Compelling opportunity — strong fundamentals, manageable risks, >15% upside
@@ -40,7 +40,8 @@ THE RECOMMENDATION MUST BE ONE OF:
 CRITICAL: Do NOT default to WATCH as a hedge. If the strategic insight agent recommended
 INVEST or PASS, follow that unless you have specific, concrete reasons to override.
 
-Structure the memo as Markdown with these sections:
+Structure the memo as Markdown:
+
 # Due Diligence Report: [Company Name]
 **Date:** [today]
 **Recommendation:** [INVEST / WATCH / PASS]
@@ -50,33 +51,82 @@ Structure the memo as Markdown with these sections:
 2-3 paragraph synthesis: what the company does, investment thesis, key financials,
 recommendation with confidence level.
 
-## 1. Why This Company? (Investment Thesis)
-Market opportunity, timing, strategic fit, core investment arguments.
+## 1. 시장 및 산업 개괄 (Market & Industry Overview)
+Market size (TAM/SAM/SOM with specific figures), CAGR, growth drivers, industry trends,
+geographic breakdown, regulatory environment context.
+Data: market_analysis (tam, sam, som, cagr, trends, market_drivers, geographic_breakdown)
++ legal_regulatory (regulatory_compliance).
 
-## 2. Business Overview
-Business model, products/services, technology, competitive positioning, team.
+## 2. 타겟 개요 및 사업/제품 구조 (Target Overview & Business/Product Structure)
+### 2.1 사업 모델 및 제품/서비스 (Business Model & Products/Services)
+Business model, revenue streams, product portfolio, technology stack, IP assessment.
+Data: tech_analysis (core_technologies, ip_patents, tech_maturity).
+### 2.2 경영진 및 조직 (Leadership & Organization)
+MANDATORY: List EVERY person from leadership_profiles with name, title, background,
+track record, and assessment. Cover capability_assessment, departure_history,
+key_person_risk, culture_signals. Each leader gets their own paragraph.
+Data: team_analysis — use ALL fields.
 
-## 3. Financial Analysis & Valuation
-Revenue, profitability, growth, cash flow, DCF, comps, fair value range.
+## 3. 성과 및 운영 지표 (Performance & Operating Metrics)
+Revenue trends (5-year), profitability (gross/EBITDA/net margins), balance sheet
+strength (cash, debt, ratios), cash flow quality (FCF, capex), key ratios vs benchmarks.
+Data: financial_analysis (revenue_trend, profitability, balance_sheet, cash_flow, key_ratios).
 
-## 4. Risk Assessment
-Risk matrix, top risks, mitigation strategies, stress scenarios.
+## 4. 경쟁 구도 및 포지셔닝 (Competitive Landscape & Positioning)
+MANDATORY: List EVERY competitor from the competitors array with name, type,
+valuation/market cap, revenue, market share, key strengths/weaknesses, threat level.
+Present as a comparison table. Include competitive_gaps, comparison_matrix, market_share.
+Data: competitor_analysis — use ALL fields.
 
-## 5. Recommendation & Next Steps
-### Investment Recommendation
-Detailed rationale for INVEST/WATCH/PASS.
-### Key Conditions & Watchpoints
+## 5. 재무 현황/전망 및 가치평가 (Financial Status/Outlook & Valuation)
+### 5.1 DCF Valuation
+MANDATORY: Show WACC with full reasoning — risk-free rate (source), equity risk premium
+(source), beta (source/methodology), resulting WACC. Terminal growth rate with reasoning.
+FCF projections with assumptions.
+### 5.2 Market Comparables
+MANDATORY: Include BOTH domestic and international comparable companies with specific
+multiples (P/E, EV/EBITDA, P/S). Present as comparison table.
+### 5.3 External Valuations Comparison
+MANDATORY: Compare your DCF result vs your comps result vs external analyst targets vs
+last funding round valuation. Present as a comparison table. Explain differences.
+### 5.4 Fair Value Range & Projections
+Low/mid/high fair value with implied upside/downside. Financial projections and guidance.
+Data: financial_analysis (valuation sub-fields) + ra_synthesis.
+
+## 6. 리스크 및 최종 의견/제언 (Risks & Final Opinion/Recommendations)
+### 6.1 Risk Matrix
+ALL top_risks from risk_assessment with severity, probability, and mitigation.
+### 6.2 법률/규제 리스크 (Legal & Regulatory Risks)
+MANDATORY: List EVERY litigation case and regulatory risk individually from
+legal_regulatory. Include investment_structure_risks, business_regulatory_risks,
+ip_risks. Each risk gets its own paragraph — do NOT summarize into one sentence.
+### 6.3 Investment Recommendation
+INVEST/WATCH/PASS with detailed rationale from strategic_insight.
+### 6.4 Key Conditions & Watchpoints
 Conditions that would change the recommendation.
-### DD Questionnaire
-Unresolved questions for follow-up investigation.
+### 6.5 DD Questionnaire
+Unresolved questions for follow-up from dd_questions.
 
 ## Appendix
 ### Review Summary
-Key verified, unverified, and contradicted claims.
+Key verified, unverified, and contradicted claims from review agent.
+### Critique Summary
+Scores and feedback from critique agent.
 ### Data Sources
 Numbered list of all sources used with inline citations.
 
-IMPORTANT: Every agent's output must be represented in the memo. Do NOT omit findings.
+═══════════════════════════════════════════════════════════════════
+MANDATORY INCLUSION CHECKLIST — Before finalizing, verify ALL items:
+[ ] Section 2.2: Every person from leadership_profiles is named and described
+[ ] Section 4: Every competitor from competitors array is listed with financials
+[ ] Section 5.1: DCF WACC has explicit reasoning (risk-free rate, ERP, beta sources)
+[ ] Section 5.2: Domestic comparable companies are included
+[ ] Section 5.3: Own valuation vs external valuations comparison exists
+[ ] Section 6.1: All top_risks from risk_assessment are listed
+[ ] Section 6.2: Every litigation case and regulatory risk is individually described
+If ANY item is missing, go back and add it before outputting.
+═══════════════════════════════════════════════════════════════════
+
 Use inline citations [1], [2], etc. throughout the memo body.
 
 After the memo, output a JSON block on its own line:
@@ -129,7 +179,7 @@ def run(state: DueDiligenceState) -> dict:
     report_structure = state.get("report_structure") or {}
     # Slim the report structure to prevent context blowup
     if report_structure:
-        structure_json = compact(_deep_trim(report_structure, max_str=200, max_list=5))
+        structure_json = compact(_deep_trim(report_structure, max_str=400, max_list=8))
     else:
         structure_json = "No structure provided."
 

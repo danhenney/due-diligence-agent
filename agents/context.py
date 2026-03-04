@@ -144,17 +144,18 @@ def _pick_rich(d: Any, *keys: str) -> dict:
 
 
 def rich_market_analysis(r: Any) -> dict:
-    d = _pick_rich(r, "summary", "tam", "sam", "som", "cagr",
-                   "red_flags", "strengths", "confidence_score")
-    return d
+    return _pick_rich(r, "summary", "tam", "sam", "som", "cagr",
+                      "trends", "market_drivers", "geographic_breakdown",
+                      "red_flags", "strengths", "confidence_score")
 
 def rich_competitor(r: Any) -> dict:
     return _pick_rich(r, "summary", "competitors", "market_share",
-                      "competitive_gaps", "red_flags", "strengths",
-                      "confidence_score")
+                      "comparison_matrix", "competitive_gaps",
+                      "red_flags", "strengths", "confidence_score")
 
 def rich_financial_analysis(r: Any) -> dict:
     return _pick_rich(r, "summary", "revenue_trend", "profitability",
+                      "balance_sheet", "cash_flow", "key_ratios",
                       "valuation", "red_flags", "strengths",
                       "confidence_score")
 
@@ -166,10 +167,13 @@ def rich_tech(r: Any) -> dict:
 def rich_legal_regulatory(r: Any) -> dict:
     return _pick_rich(r, "summary", "investment_structure_risks",
                       "business_regulatory_risks", "litigation",
+                      "ip_risks", "regulatory_compliance",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_team(r: Any) -> dict:
-    return _pick_rich(r, "summary", "leadership_profiles", "key_person_risk",
+    return _pick_rich(r, "summary", "leadership_profiles",
+                      "capability_assessment", "departure_history",
+                      "key_person_risk", "culture_signals",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_ra_synthesis(r: Any) -> dict:

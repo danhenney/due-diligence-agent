@@ -58,6 +58,7 @@ Return a JSON object with this exact structure:
 def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     company = state["company_name"]
     url = state.get("company_url") or ""
+    docs = state.get("uploaded_docs") or []
     is_public = state.get("is_public", True)
 
     if is_public is False:
@@ -74,8 +75,17 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
             "Use Google Trends to compare brand interest levels.\n"
         )
 
+    doc_note = ""
+    if docs:
+        doc_note = (
+            f"\nUPLOADED DOCUMENTS: {', '.join(docs)}\n"
+            "These contain key data from the user. Extract competitor mentions "
+            "using extract_pdf_text BEFORE web search. Uploaded materials are often "
+            "more informative than public sources.\n"
+        )
+
     user_message = (
-        f"Company: {company}\nURL: {url}\n\n"
+        f"Company: {company}\nURL: {url}{doc_note}\n\n"
         "Identify and analyze ALL significant competitors across every business line. "
         "Build a comprehensive comparison matrix.\n\n"
         f"{data_instructions}\n"

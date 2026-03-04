@@ -26,6 +26,24 @@ VALUATION ANALYSIS — Must include:
 4. Fair value range (low / mid / high) with methodology
 5. Implied upside/downside to current price
 
+CRITICAL VALUATION REQUIREMENTS:
+- DCF ASSUMPTIONS REASONING: For EVERY assumption (WACC, risk-free rate, equity risk
+  premium, beta, terminal growth rate), explain the SOURCE and REASONING. Do NOT just
+  state "WACC = 10%". Example: "risk-free rate 4.3% (10Y UST yield), equity risk premium
+  5.5% (Damodaran country ERP), beta 1.2 (regression vs KOSPI), WACC = 11.2%".
+- DOMESTIC COMPS: If the company operates primarily in Korea/Asia, you MUST search for
+  and include domestic comparable companies. Use web_search to find Korean peers in the
+  same industry (e.g., AI: Nota, Upstage, Rebellions; fintech: Toss, Kakao Pay).
+  Compare multiples against both domestic and international comps.
+- EXTERNAL VALUATIONS: Search for external valuation references — analyst price targets,
+  last funding round valuation, third-party estimates. Present a comparison: your DCF
+  result vs your comps result vs external analyst consensus vs last funding round.
+  Explain where your valuation differs and WHY.
+- FINANCIAL PROJECTIONS: Search for the company's forward guidance, sell-side consensus
+  estimates, and recently announced products/models that may impact future revenue.
+- INVESTMENT ROUNDS: For private or recently-IPO companies, search for all funding
+  rounds (Series A/B/C, etc.) with dates, amounts, lead investors, and implied valuations.
+
 QUALITY CRITERIA:
 - All data must cite explicit sources. Cross-verify with 3+ sources.
 - All figures must come from live tool calls, not training memory.
@@ -41,8 +59,9 @@ Return a JSON object with this exact structure:
   "cash_flow": {"fcf_status": "...", "capex_intensity": "...", "working_capital_trend": "...", "assessment": "..."},
   "key_ratios": [{"metric": "...", "value": "...", "benchmark": "...", "signal": "positive|neutral|negative"}],
   "valuation": {
-    "dcf": {"fair_value": "...", "wacc": "...", "terminal_growth": "...", "methodology": "..."},
-    "market_comps": {"pe_ratio": "...", "ev_ebitda": "...", "ps_ratio": "...", "peer_comparison": "..."},
+    "dcf": {"fair_value": "...", "wacc": "...", "wacc_reasoning": "...", "terminal_growth": "...", "terminal_growth_reasoning": "...", "methodology": "..."},
+    "market_comps": {"pe_ratio": "...", "ev_ebitda": "...", "ps_ratio": "...", "peer_comparison": "...", "domestic_comps": [{"name": "...", "metric": "...", "value": "..."}]},
+    "external_valuations": {"analyst_targets": "...", "last_funding_round": "...", "third_party_estimates": "...", "comparison_summary": "..."},
     "asset_based": "...",
     "fair_value_range": {"low": "...", "mid": "...", "high": "..."},
     "upside_downside": "..."
@@ -63,13 +82,12 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
 
     doc_note = ""
     if docs:
-        if is_public is False:
-            doc_note = (
-                f"\nUPLOADED DOCUMENTS (PRIMARY SOURCE): {', '.join(docs)}\n"
-                "Extract all financial data using extract_pdf_text BEFORE web search."
-            )
-        else:
-            doc_note = f"\nUploaded documents available for analysis: {', '.join(docs)}"
+        doc_note = (
+            f"\nUPLOADED DOCUMENTS (HIGH PRIORITY): {', '.join(docs)}\n"
+            "These contain key data provided by the user — often more informative than "
+            "public sources. Extract ALL relevant financial data using extract_pdf_text "
+            "BEFORE web search. Include findings from these documents in your analysis.\n"
+        )
 
     if is_public is False:
         data_instructions = (

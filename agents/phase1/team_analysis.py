@@ -71,6 +71,7 @@ Return a JSON object with this exact structure:
 def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     company = state["company_name"]
     url = state.get("company_url") or ""
+    docs = state.get("uploaded_docs") or []
 
     data_instructions = (
         "Use web_search to find leadership bios, LinkedIn profiles (via web), "
@@ -78,8 +79,17 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         "Use news_search for recent leadership changes and company culture signals.\n"
     )
 
+    doc_note = ""
+    if docs:
+        doc_note = (
+            f"\nUPLOADED DOCUMENTS: {', '.join(docs)}\n"
+            "These contain key data from the user. Extract team/leadership info "
+            "using extract_pdf_text BEFORE web search. Uploaded materials are often "
+            "more informative than public sources.\n"
+        )
+
     user_message = (
-        f"Company: {company}\nURL: {url}\n\n"
+        f"Company: {company}\nURL: {url}{doc_note}\n\n"
         "Conduct a thorough leadership and team analysis.\n\n"
         f"{data_instructions}\n"
         "SOURCE TRACKING: For every tool call that returns a URL or source_url, "
