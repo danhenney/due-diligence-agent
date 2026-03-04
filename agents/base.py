@@ -155,13 +155,19 @@ def _parse_json_response(text: str) -> dict[str, Any]:
     """Extract the first JSON object found in text, or return {"raw": text}."""
     cleaned = text
     if "```json" in text:
-        start   = text.index("```json") + 7
-        end     = text.index("```", start)
-        cleaned = text[start:end].strip()
+        start = text.index("```json") + 7
+        end   = text.find("```", start)
+        if end != -1:
+            cleaned = text[start:end].strip()
+        else:
+            cleaned = text[start:].strip()
     elif "```" in text:
-        start   = text.index("```") + 3
-        end     = text.index("```", start)
-        cleaned = text[start:end].strip()
+        start = text.index("```") + 3
+        end   = text.find("```", start)
+        if end != -1:
+            cleaned = text[start:end].strip()
+        else:
+            cleaned = text[start:].strip()
 
     try:
         return json.loads(cleaned)
