@@ -107,7 +107,7 @@ def input_processor(state: DueDiligenceState) -> dict:
 
 
 def phase1_parallel(state: DueDiligenceState) -> dict:
-    """Run all 6 Phase 1 agents concurrently using ThreadPoolExecutor."""
+    """Run Phase 1 agents in batches of 2 to stay within free-tier API limits."""
     agent_names = [
         "market_analysis", "competitor_analysis", "financial_analysis",
         "tech_analysis", "legal_regulatory", "team_analysis",
@@ -125,21 +125,28 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
     errors = []
     agent_usage: dict[str, dict] = {}
 
-    future_to_name: dict = {}
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
-            if i > 0:
-                _time.sleep(3)
-            future_to_name[executor.submit(_run_agent_with_usage, fn, state)] = name
+    # Run in batches of 2 to avoid overwhelming free-tier Tavily rate limits
+    batch_size = 2
+    for batch_start in range(0, len(agent_fns), batch_size):
+        batch_fns = agent_fns[batch_start:batch_start + batch_size]
+        batch_names = agent_names[batch_start:batch_start + batch_size]
 
-        for future in as_completed(future_to_name):
-            name = future_to_name[future]
-            try:
-                result, usage = future.result()
-                merged.update(result)
-                agent_usage[name] = usage
-            except Exception as exc:
-                errors.append(f"{name} failed: {exc}")
+        if batch_start > 0:
+            _time.sleep(5)  # pause between batches for rate limit recovery
+
+        future_to_name: dict = {}
+        with ThreadPoolExecutor(max_workers=batch_size) as executor:
+            for fn, name in zip(batch_fns, batch_names):
+                future_to_name[executor.submit(_run_agent_with_usage, fn, state)] = name
+
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    result, usage = future.result()
+                    merged.update(result)
+                    agent_usage[name] = usage
+                except Exception as exc:
+                    errors.append(f"{name} failed: {exc}")
 
     merged["__agent_usage__"] = agent_usage
     if errors:

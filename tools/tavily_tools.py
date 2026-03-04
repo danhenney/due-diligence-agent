@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from tavily import TavilyClient
@@ -20,13 +21,28 @@ def _get_client() -> TavilyClient:
     return _client
 
 
+def _search_with_retry(client: TavilyClient, max_retries: int = 3, **kwargs) -> dict:
+    """Call Tavily search with retry + backoff on rate limit (HTTP 429)."""
+    for attempt in range(max_retries + 1):
+        try:
+            return client.search(**kwargs)
+        except Exception as e:
+            err_msg = str(e).lower()
+            if ("429" in err_msg or "rate" in err_msg or "limit" in err_msg) and attempt < max_retries:
+                wait = 15 * (attempt + 1)  # 15s, 30s, 45s
+                time.sleep(wait)
+            else:
+                raise
+
+
 def web_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     """General web search via Tavily.
 
     Returns a list of result dicts with keys: title, url, content, score.
     """
     client = _get_client()
-    response = client.search(
+    response = _search_with_retry(
+        client,
         query=query,
         search_depth="advanced",
         max_results=max_results,
@@ -57,7 +73,8 @@ def news_search(query: str, max_results: int = 5, days: int = 30) -> list[dict[s
     Returns a list of result dicts with keys: title, url, content, published_date, score.
     """
     client = _get_client()
-    response = client.search(
+    response = _search_with_retry(
+        client,
         query=query,
         search_depth="advanced",
         topic="news",
