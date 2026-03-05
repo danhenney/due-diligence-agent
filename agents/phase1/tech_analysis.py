@@ -79,6 +79,14 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
             "Use news_search for recent technology announcements.\n"
         )
 
+    if url:
+        data_instructions += (
+            f"\nCRITICAL: Search the company's own website for their latest products "
+            f"and models. Use web_search with queries like '{company} latest model 2026' "
+            f"or '{company} new product launch'. The company URL is {url} — search for "
+            f"product pages. Missing a recently launched product is a major oversight.\n"
+        )
+
     doc_note = ""
     if docs:
         doc_note = (
