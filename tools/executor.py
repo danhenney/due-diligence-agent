@@ -4,7 +4,7 @@ from __future__ import annotations
 import json as _json
 import threading
 
-from tools import tavily_tools, edgar_tools, pdf_tools, yfinance_tools
+from tools import tavily_tools, edgar_tools, dart_tools, pdf_tools, yfinance_tools
 from tools import pytrends_tools, fred_tools, github_tools, patents_tools
 
 # ── Per-run tool result cache ────────────────────────────────────────────────
@@ -29,7 +29,7 @@ def _cache_key(tool_name: str, tool_input: dict) -> tuple:
 # Map tool name → executor module
 _TOOL_REGISTRY: dict[str, object] = {}
 
-for _mod in (tavily_tools, edgar_tools, pdf_tools, yfinance_tools,
+for _mod in (tavily_tools, edgar_tools, dart_tools, pdf_tools, yfinance_tools,
              pytrends_tools, fred_tools, github_tools, patents_tools):
     _TOOL_REGISTRY[_mod.__name__.split(".")[-1]] = _mod
 
@@ -69,6 +69,9 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "financial_analysis": [
+            dart_tools.DART_FINSTATE_TOOL,
+            dart_tools.DART_COMPANY_TOOL,
+            dart_tools.DART_LIST_TOOL,
             yfinance_tools.YF_GET_INFO_TOOL,
             yfinance_tools.YF_GET_FINANCIALS_TOOL,
             yfinance_tools.YF_GET_ANALYST_DATA_TOOL,
@@ -87,6 +90,7 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "legal_regulatory": [
+            dart_tools.DART_LIST_TOOL,
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
@@ -106,6 +110,7 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
         "strategic_insight": [],
         # Phase 3 — Review & Critique
         "review_agent": [
+            dart_tools.DART_FINSTATE_TOOL,
             tavily_tools.WEB_SEARCH_TOOL,
             yfinance_tools.YF_GET_INFO_TOOL,
         ],
@@ -150,6 +155,9 @@ def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
     # EDGAR tools
     if tool_name in ("get_sec_filings", "get_company_facts"):
         return edgar_tools.execute_tool(tool_name, tool_input)
+    # DART tools (Korean FSS)
+    if tool_name in ("dart_finstate", "dart_company", "dart_list"):
+        return dart_tools.execute_tool(tool_name, tool_input)
     # PDF tools
     if tool_name in ("extract_pdf_text", "extract_pdf_tables"):
         return pdf_tools.execute_tool(tool_name, tool_input)
@@ -174,6 +182,9 @@ def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
 def _fallback_for(tool_name: str) -> str:
     """Return the recommended fallback tool name for a given tool."""
     _fallbacks = {
+        "dart_finstate":             "web_search",
+        "dart_company":             "web_search",
+        "dart_list":                "web_search",
         "get_sec_filings":          "web_search",
         "get_company_facts":        "web_search",
         "yf_get_info":              "web_search",

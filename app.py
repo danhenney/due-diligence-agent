@@ -313,7 +313,7 @@ import streamlit as st
 # This is a no-op when running locally with a .env file.
 try:
     for _k in ["ANTHROPIC_API_KEY", "TAVILY_API_KEY", "EDGAR_USER_AGENT",
-                "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]:
+                "DART_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]:
         if _k in st.secrets and not os.environ.get(_k):
             os.environ[_k] = str(st.secrets[_k])
 except Exception:

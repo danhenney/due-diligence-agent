@@ -171,6 +171,30 @@ def run_agent(
         )
         system_prompt = system_prompt + recency_note
 
+        has_dart = any(t.get("name", "").startswith("dart_") for t in tools)
+        has_sec = any(t.get("name") == "get_sec_filings" for t in tools)
+        if has_dart or has_sec:
+            filing_note = (
+                "\n\nOFFICIAL FILINGS PRIORITY (CRITICAL): "
+            )
+            if has_dart:
+                filing_note += (
+                    "For Korean companies, DART (금융감독원 전자공시시스템) filings are the "
+                    "HIGHEST-AUTHORITY source. Call dart_finstate() and dart_company() FIRST "
+                    "before any web search for financial data. "
+                )
+            if has_sec:
+                filing_note += (
+                    "For US companies, SEC 10-K/10-Q filings are the HIGHEST-AUTHORITY source. "
+                    "Call get_sec_filings() for official data. "
+                )
+            filing_note += (
+                "SOURCE HIERARCHY: DART/SEC official filings > uploaded documents > "
+                "yfinance live data > web search. When official filings conflict with "
+                "other sources, the official filing ALWAYS wins."
+            )
+            system_prompt = system_prompt + filing_note
+
         has_pdf = any(t.get("name") in ("extract_pdf_text", "extract_pdf_tables") for t in tools)
         if has_pdf:
             doc_priority_note = (

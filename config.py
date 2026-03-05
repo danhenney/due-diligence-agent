@@ -17,6 +17,9 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 # SEC EDGAR
 EDGAR_USER_AGENT = os.getenv("EDGAR_USER_AGENT", "DueDiligenceAgent contact@example.com")
 
+# DART (Korean FSS) — free key at opendart.fss.or.kr
+DART_API_KEY = os.getenv("DART_API_KEY", "")
+
 # Optional — improves macro data (free key at fred.stlouisfed.org)
 FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 
