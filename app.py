@@ -18,6 +18,7 @@ from supabase_storage import (
     upload_file,
     download_pdf,
     download_file,
+    cleanup_stale_jobs,
 )
 
 # Max concurrent analyses. Additional submissions wait in queue.
@@ -988,6 +989,11 @@ for key, default in [
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+# On first load (fresh deploy/reboot), cancel any orphaned running/queued jobs
+if "startup_cleanup_done" not in st.session_state:
+    cleanup_stale_jobs()
+    st.session_state.startup_cleanup_done = True
 
 
 # ── Language toggle helper ─────────────────────────────────────────────────────

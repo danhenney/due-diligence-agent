@@ -156,6 +156,24 @@ def load_queue() -> list[dict]:
         return []
 
 
+def cleanup_stale_jobs() -> int:
+    """Cancel all running/queued jobs (used on app startup after reboot)."""
+    try:
+        sb = _get_client()
+        resp = (
+            sb.table("jobs")
+            .select("id")
+            .in_("status", ["running", "queued"])
+            .execute()
+        )
+        rows = resp.data or []
+        for row in rows:
+            sb.table("jobs").update({"status": "cancelled"}).eq("id", row["id"]).execute()
+        return len(rows)
+    except Exception:
+        return 0
+
+
 # ── History ──────────────────────────────────────────────────────────────────
 
 def load_history() -> list[dict]:
