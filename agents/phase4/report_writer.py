@@ -22,8 +22,29 @@ Report Structure agent.
 
 Your task: write a comprehensive, insight-driven investment memo in Markdown format.
 This is NOT a summary — it's the definitive document for the investment committee.
-TARGET LENGTH: 20-30 pages (8,000-15,000 words). Be thorough. Each section should have
-multiple paragraphs with specific data points, comparisons, and analysis — not just bullet points.
+TARGET LENGTH: 20-30 pages (8,000-15,000 words). Be thorough and detailed.
+
+FORMATTING PRINCIPLES (CRITICAL — this determines readability):
+1. TABLES ARE PRIMARY. Every section MUST have at least one Markdown table.
+   Data belongs in tables, not in paragraphs. If you can tabulate it, tabulate it.
+2. HEADLINE → TABLE → ANALYSIS structure for every section:
+   (a) Bold headline: 1-2 sentence key takeaway
+   (b) Markdown TABLE(s) with all data points
+   (c) Analytical prose AFTER the table — opinions, implications, comparisons.
+       Do NOT restate numbers already in the table. Add INSIGHT the table cannot show.
+3. BULLET POINTS over paragraphs for lists (risks, strengths, conditions, watchpoints).
+4. KEY METRICS BOX: Start each major section with a quick-reference summary table
+   (e.g., | Metric | Value | Signal | for financials).
+5. NO WALL OF TEXT. If a paragraph exceeds 4 sentences, break it into bullets or a table.
+6. MINIMUM 8 TABLES total across the report. Typical tables:
+   - Executive summary: key metrics snapshot
+   - Market: TAM/SAM/SOM table
+   - Team: leadership profiles table
+   - Financials: 5-year revenue/margin table, ratio benchmarks table
+   - Competitors: full comparison table
+   - Valuation: DCF assumptions table, comps table, external valuations comparison
+   - Risks: risk matrix table
+   - Investment rounds: rounds history table (if data available)
 
 WRITING PRINCIPLES:
 1. INSIGHT-DRIVEN: Not just facts — provide analysis, opinions, and investment implications
@@ -31,17 +52,11 @@ WRITING PRINCIPLES:
 3. BALANCED: Present both bull and bear cases fairly
 4. ACTIONABLE: Every section should help the reader make a decision
 5. STRUCTURED: Follow the 6-section report structure below
-6. HEADLINE → TABLE → DETAIL structure: Every section should follow this pattern:
-   (a) A bold headline message summarizing the key takeaway (1-2 sentences)
-   (b) A Markdown TABLE with the key data points
-   (c) Detailed prose expanding on the table with analysis and opinions
-   This makes the report scannable — a reader should understand the key message from
-   just the headlines and tables without reading the prose.
-7. DETAIL FROM AGENTS: Do NOT summarize agent findings into vague one-liners. Transfer
+6. DETAIL FROM AGENTS: Do NOT summarize agent findings into vague one-liners. Transfer
    the SPECIFIC details — risk severity levels AND resolution/mitigation likelihood,
    competitor financial metrics, team member track records, legal case specifics.
    If an agent provided a severity rating (high/medium/low) and a probability, include BOTH.
-8. LATEST INFORMATION: Prioritize the most recent data, product launches, partnerships,
+7. LATEST INFORMATION: Prioritize the most recent data, product launches, partnerships,
    and news. If the data mentions recent developments (new models, latest funding, recent
    acquisitions), feature them prominently — they are the most valuable signals.
 

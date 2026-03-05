@@ -11,6 +11,41 @@ from config import TAVILY_API_KEY
 
 _client: TavilyClient | None = None
 
+# Low-quality, unreliable, or clickbait domains to exclude from results
+_BLOCKED_DOMAINS = {
+    # Content farms / SEO spam
+    "medium.com", "substack.com", "seekingalpha.com",
+    # Shady research / aggregators
+    "researchgate.net", "academia.edu", "ssrn.com",
+    "marketresearchfuture.com", "alliedmarketresearch.com",
+    "grandviewresearch.com", "fortunebusinessinsights.com",
+    "mordorintelligence.com", "precedenceresearch.com",
+    "verifiedmarketresearch.com", "transparencymarketresearch.com",
+    "marketsandmarkets.com", "globenewswire.com",
+    "prnewswire.com", "businesswire.com",
+    # AI-generated / low-quality news
+    "benzinga.com", "investorplace.com", "fool.com",
+    "insidermonkey.com", "gurufocus.com",
+    "stockanalysis.com", "tipranks.com",
+    "marketscreener.com", "zacks.com",
+    # Generic / unreliable
+    "wikipedia.org", "quora.com", "reddit.com",
+}
+
+
+def _filter_results(results: list[dict]) -> list[dict]:
+    """Remove results from blocked domains."""
+    filtered = []
+    for r in results:
+        url = r.get("url", "")
+        domain = url.split("//")[-1].split("/")[0].lower()
+        # Strip www. prefix
+        if domain.startswith("www."):
+            domain = domain[4:]
+        if domain not in _BLOCKED_DOMAINS:
+            filtered.append(r)
+    return filtered
+
 
 def _get_client() -> TavilyClient:
     global _client
@@ -59,7 +94,7 @@ def web_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
             "content": r.get("content", ""),
             "score": r.get("score", 0.0),
         })
-    return results
+    return _filter_results(results)
 
 
 def news_search(query: str, max_results: int = 5, days: int = 14) -> list[dict[str, Any]]:
@@ -94,7 +129,7 @@ def news_search(query: str, max_results: int = 5, days: int = 14) -> list[dict[s
             "published_date": r.get("published_date", ""),
             "score": r.get("score", 0.0),
         })
-    return results
+    return _filter_results(results)
 
 
 # ── Anthropic tool definitions ────────────────────────────────────────────────
