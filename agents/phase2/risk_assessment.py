@@ -28,6 +28,12 @@ For EACH risk:
 - Calculate severity = probability × impact
 - Propose specific mitigation strategies
 
+RISK CALIBRATION — do NOT over-flag:
+- Minor document discrepancies (fund size committed vs called, rounding, currency
+  conversion, different reporting dates) are NOT risks. Only flag genuinely material issues.
+- Common fund terminology differences (AUM committed vs paid-in, gross vs net) are normal.
+- Focus on risks that could actually CHANGE the investment decision, not paperwork noise.
+
 QUALITY CRITERIA:
 - All data must cite explicit sources. Cross-verify with 3+ sources.
 - All figures must come from live tool calls, not training memory.

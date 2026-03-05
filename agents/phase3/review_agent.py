@@ -41,6 +41,17 @@ STALENESS CHECK (MANDATORY):
   the updated information with source.
 - Stale information that affects the investment thesis is a CRITICAL failure.
 
+DO NOT OVER-FLAG minor discrepancies between uploaded documents:
+- Fund size differences (e.g., $300M vs $135M) are usually committed capital vs
+  called/paid-in capital — this is NORMAL, not a red flag. Note it as a terminology
+  difference, not a contradiction.
+- Minor rounding differences, currency conversion variations, or different reporting
+  dates are NOT red flags. Only flag if the difference is clearly material and
+  cannot be explained by standard accounting/reporting conventions.
+- Typos and formatting differences between documents are NOT red flags.
+- Reserve "CONTRADICTED" and red flags for genuinely material issues that affect
+  the investment thesis — not for routine document inconsistencies.
+
 Focus on the highest-stakes facts:
 1. Revenue / financial figures and growth rates
 2. Market size claims (TAM/SAM/SOM)
