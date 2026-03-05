@@ -62,13 +62,13 @@ def web_search(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     return results
 
 
-def news_search(query: str, max_results: int = 5, days: int = 30) -> list[dict[str, Any]]:
+def news_search(query: str, max_results: int = 5, days: int = 14) -> list[dict[str, Any]]:
     """Recent news search via Tavily (finance / business focused).
 
     Args:
         query: Search query string.
         max_results: Number of results to return.
-        days: Look back this many days.
+        days: Look back this many days (default 14 for freshest results).
 
     Returns a list of result dicts with keys: title, url, content, published_date, score.
     """
@@ -142,8 +142,8 @@ NEWS_SEARCH_TOOL = {
             },
             "days": {
                 "type": "integer",
-                "description": "Look back this many days (default 30).",
-                "default": 30,
+                "description": "Look back this many days (default 14).",
+                "default": 14,
             },
         },
         "required": ["query"],

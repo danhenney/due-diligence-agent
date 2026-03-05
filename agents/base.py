@@ -148,12 +148,32 @@ def run_agent(
         )
         system_prompt = system_prompt + budget_note
 
+        recency_note = (
+            "\n\nRECENCY REQUIREMENT: Prioritize the MOST RECENT information. "
+            f"Today is {today}. Any claim or fact older than 6 months should be "
+            "verified with a fresh news_search. If you find contradictory info "
+            "between an older source and a newer one, ALWAYS prefer the newer source. "
+            "Stale data is worse than no data — flag anything you cannot confirm as current."
+        )
+        system_prompt = system_prompt + recency_note
+
     if language.lower() != "english":
         system_prompt = (
             system_prompt
             + f"\n\nIMPORTANT: Write your ENTIRE response in {language}, "
             + "including all analysis text and JSON field values. Do not use English."
         )
+        if tools and has_web_search:
+            local_search_note = (
+                f"\n\nLOCAL-LANGUAGE SEARCH: For companies based in non-English-speaking "
+                f"countries, you MUST also search in the LOCAL LANGUAGE (e.g., Korean for "
+                f"Korean companies, Japanese for Japanese companies). Local news outlets "
+                f"report breaking developments DAYS before English media picks them up. "
+                f"Use at least 1-2 of your search calls with queries in the local language "
+                f"(e.g., '네이버 국가 AI 프로젝트 2025' instead of 'Naver sovereign AI project'). "
+                f"Local-language results are MORE RELIABLE for local market developments."
+            )
+            system_prompt = system_prompt + local_search_note
 
     client = _get_client()
     messages: list[dict] = [{"role": "user", "content": user_message}]

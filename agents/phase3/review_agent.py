@@ -26,15 +26,29 @@ For each significant claim, determine:
 - VERIFIED: independently confirmed via live tool calls
 - UNVERIFIED: plausible but could not confirm
 - CONTRADICTED: evidence found that disputes the claim
-- STALE: data may be outdated
+- STALE: data may be outdated — THIS IS CRITICAL (see below)
+
+STALENESS CHECK (MANDATORY):
+- For EVERY major claim about partnerships, government projects, competitive position,
+  or strategic initiatives, run a news_search with the MOST RECENT timeframe (days=14).
+- If the company is based in a non-English-speaking country (Korea, Japan, etc.),
+  you MUST search in the LOCAL LANGUAGE (e.g., '네이버 주권 AI' not 'Naver sovereign AI').
+  Local news breaks developments DAYS before English media. English-only searches will
+  miss critical updates like project cancellations, leadership changes, or policy shifts.
+- Compare the date of the original source vs the latest news. If the situation has
+  CHANGED (e.g., a company was removed from a project, a partnership was terminated,
+  a product was discontinued), mark the original claim as CONTRADICTED and provide
+  the updated information with source.
+- Stale information that affects the investment thesis is a CRITICAL failure.
 
 Focus on the highest-stakes facts:
 1. Revenue / financial figures and growth rates
 2. Market size claims (TAM/SAM/SOM)
-3. Competitive position claims
-4. Valuation figures and multiples
-5. Risk severity assessments
-6. Recommendation-critical data points
+3. Competitive position claims — especially government/policy-related ones
+4. Partnership and project participation claims — verify they are STILL ACTIVE
+5. Valuation figures and multiples
+6. Risk severity assessments
+7. Recommendation-critical data points
 
 Return a JSON object with this exact structure:
 {
