@@ -65,12 +65,15 @@ def _estimate_chars(system: str, messages: list[dict]) -> int:
     return total
 
 
-def _trim_oldest_tool_results(messages: list[dict], system: str) -> None:
+def _trim_oldest_tool_results(
+    messages: list[dict], system: str, protected_ids: set[str] | None = None
+) -> None:
     """Trim tool result contents in-place, oldest first, until under budget.
 
-    NEVER trims PDF tool results — uploaded documents are the primary data
-    source and must be preserved in full throughout the conversation.
+    NEVER trims tool results whose tool_use_id is in protected_ids — these
+    are PDF extractions from uploaded documents that must be preserved.
     """
+    protected = protected_ids or set()
     while _estimate_chars(system, messages) > _MAX_CONTEXT_CHARS:
         trimmed_any = False
         for msg in messages:
@@ -80,8 +83,8 @@ def _trim_oldest_tool_results(messages: list[dict], system: str) -> None:
             for block in content:
                 if not isinstance(block, dict) or block.get("type") != "tool_result":
                     continue
-                # Skip PDF results — they must never be trimmed
-                if block.get("_pdf_tool"):
+                # Skip protected PDF results
+                if block.get("tool_use_id", "") in protected:
                     continue
                 c = block.get("content", "")
                 if isinstance(c, str) and len(c) > 200:
@@ -211,12 +214,13 @@ def run_agent(
 
     client = _get_client()
     messages: list[dict] = [{"role": "user", "content": user_message}]
+    _pdf_tool_ids: set[str] = set()  # track PDF tool_use_ids for trim protection
 
     for _ in range(max_iterations):
         # Safety net: trim OLD tool results if context is too large.
         # This only truncates previous tool results (search data etc.),
-        # never the user's initial message or agent output text.
-        _trim_oldest_tool_results(messages, system_prompt)
+        # never the user's initial message, agent output, or PDF results.
+        _trim_oldest_tool_results(messages, system_prompt, _pdf_tool_ids)
 
         kwargs: dict[str, Any] = {
             "model":      MODEL_NAME,
@@ -257,14 +261,13 @@ def run_agent(
                 cap = _MAX_PDF_RESULT_CHARS if is_pdf else _MAX_TOOL_RESULT_CHARS
                 if isinstance(result, str) and len(result) > cap:
                     result = result[:cap] + "\n[…truncated]"
-                tr = {
+                tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": tb.id,
                     "content":     result,
-                }
+                })
                 if is_pdf:
-                    tr["_pdf_tool"] = True  # protect from safety-net trimming
-                tool_results.append(tr)
+                    _pdf_tool_ids.add(tb.id)  # protect from safety-net trimming
             messages.append({"role": "user", "content": tool_results})
             continue
 
