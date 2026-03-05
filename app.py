@@ -169,7 +169,16 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         def _over_budget() -> bool:
             return _total_cost() > MAX_COST_PER_ANALYSIS
 
+        class _Cancelled(Exception):
+            pass
+
+        def _check_cancelled() -> None:
+            job = read_job(job_id)
+            if job and job.get("status") == "cancelled":
+                raise _Cancelled()
+
         def _step(fn, node_name: str) -> None:
+            _check_cancelled()
             result = fn(state)
             state.update(result)
             progress.append(node_name)
@@ -287,6 +296,9 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 update_job(job_id, {"agent_outputs": agent_outputs})
         except Exception:
             pass  # Don't let agent_outputs failure break the completed job
+
+    except _Cancelled:
+        update_job(job_id, {"status": "cancelled"})
 
     except Exception as exc:
         update_job(job_id, {"status": "error", "error": str(exc)})
@@ -1535,6 +1547,15 @@ elif st.session_state.phase == "running":
             st.session_state.phase = "form"
             st.rerun()
 
+    elif job["status"] == "cancelled":
+        st.warning("⛔ Analysis was cancelled.")
+        if job_id in st.session_state.active_jobs:
+            st.session_state.active_jobs.remove(job_id)
+        if st.button(t("try_again_btn")):
+            st.session_state.viewing_job = None
+            st.session_state.phase = "form"
+            st.rerun()
+
     elif job["status"] == "queued":
         # Waiting for a semaphore slot — show queue message
         _q_hdr, _q_lang, _q_back = st.columns([4, 0.7, 1])
@@ -1558,12 +1579,21 @@ elif st.session_state.phase == "running":
         # Still running — show live progress and poll
         _node_labels = _NODE_LABELS_KO if st.session_state.get("ui_lang") == "ko" else _NODE_LABELS_EN
 
-        _run_hdr, _run_lang, _run_back, _run_hist = st.columns([4, 0.7, 1, 0.8])
+        _run_hdr, _run_lang, _run_cancel, _run_back, _run_hist = st.columns([3.5, 0.7, 0.8, 1, 0.8])
         with _run_hdr:
             st.markdown(t("analyzing", company))
             st.caption(t("running_caption"))
         with _run_lang:
             _lang_toggle("running")
+        with _run_cancel:
+            st.markdown("")
+            if st.button("⛔ Cancel", key="cancel_running", type="secondary"):
+                update_job(job_id, {"status": "cancelled"})
+                if job_id in st.session_state.active_jobs:
+                    st.session_state.active_jobs.remove(job_id)
+                st.session_state.viewing_job = None
+                st.session_state.phase = "form"
+                st.rerun()
         with _run_back:
             st.markdown("")
             if st.button(t("back_to_form_btn"), key="back_form_running"):
