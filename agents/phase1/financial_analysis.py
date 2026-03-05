@@ -45,13 +45,16 @@ CRITICAL VALUATION REQUIREMENTS:
 - FINANCIAL PROJECTIONS: Search for the company's forward guidance, sell-side consensus
   estimates, and recently announced products/models that may impact future revenue.
   Include the LATEST product launches, partnerships, and business developments.
-- INVESTMENT ROUNDS (CRITICAL — often in uploaded documents):
-  UPLOADED DOCUMENTS frequently contain detailed funding history with pre-money and
-  post-money valuations, lead investors, and round sizes. This is the MOST RELIABLE
-  source for round data. Extract EVERY round from the uploaded docs FIRST, then
-  supplement with web search.
-  For EACH round, you MUST output: round name, date, amount raised, lead investor(s),
-  pre-money valuation, post-money valuation, and multiple vs previous round.
+- INVESTMENT ROUNDS (CRITICAL — uploaded documents are the AUTHORITY):
+  Uploaded documents often contain EXACT funding round data: pre-money valuation,
+  post-money valuation, investment amount, and investor names for EVERY round.
+  These exact figures from uploaded docs OVERRIDE any web-search estimates.
+  Do NOT replace exact uploaded figures (e.g., "Pre 255억원, Post 300억원") with
+  vague web estimates (e.g., "Pre $100~150M estimated"). The uploaded data IS the answer.
+  For EACH round, you MUST output in the investment_rounds JSON array:
+  round name, date, amount raised, lead investor(s), ALL participating investors,
+  pre-money valuation (EXACT if in uploaded doc), post-money valuation (EXACT),
+  and multiple vs previous round.
   Do NOT skip any round. Do NOT summarize multiple rounds into one line.
   Then ANALYZE:
   (1) What is the valuation trajectory across rounds? (growth multiple between rounds)

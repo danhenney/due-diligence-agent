@@ -157,6 +157,21 @@ def run_agent(
         )
         system_prompt = system_prompt + recency_note
 
+        has_pdf = any(t.get("name") in ("extract_pdf_text", "extract_pdf_tables") for t in tools)
+        if has_pdf:
+            doc_priority_note = (
+                "\n\nUPLOADED DOCUMENT PRIORITY (CRITICAL RULE): "
+                "When uploaded documents provide SPECIFIC data (exact figures, names, dates, "
+                "valuations, round details, financial metrics, team bios, etc.), those figures "
+                "are the AUTHORITATIVE source. Do NOT override them with vague web estimates. "
+                "Example: if the uploaded doc says 'Pre-money 255억원, Post-money 300억원', "
+                "use exactly those numbers — do NOT replace with 'estimated $100~150M' from web. "
+                "Web search is for CHALLENGING and CROSS-VERIFYING uploaded data, not replacing it. "
+                "If web data contradicts uploaded data, report BOTH and flag the discrepancy — "
+                "but the uploaded figures remain the primary reference."
+            )
+            system_prompt = system_prompt + doc_priority_note
+
     if language.lower() != "english":
         system_prompt = (
             system_prompt
