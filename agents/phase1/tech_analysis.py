@@ -18,6 +18,8 @@ Focus on:
 5. Scalability and architecture — can the tech scale 10x?
 6. Open source footprint — GitHub activity, community engagement
 7. Technical debt and risks — legacy systems, vendor lock-in
+8. LATEST product launches and models — search for the most recent announcements,
+   new model releases, and product updates. These are critical for valuation.
 8. R&D investment levels — % of revenue, team size, hiring trends
 
 QUALITY CRITERIA:

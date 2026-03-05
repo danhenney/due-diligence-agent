@@ -31,6 +31,16 @@ WRITING PRINCIPLES:
 3. BALANCED: Present both bull and bear cases fairly
 4. ACTIONABLE: Every section should help the reader make a decision
 5. STRUCTURED: Follow the 6-section report structure below
+6. TABLE-DRIVEN: Use Markdown tables liberally for key comparisons — competitor matrix,
+   domestic vs international comps, valuation comparison, risk matrix, investment rounds.
+   Tables make the report scannable. Each major section should have at least one table.
+7. DETAIL FROM AGENTS: Do NOT summarize agent findings into vague one-liners. Transfer
+   the SPECIFIC details — risk severity levels AND resolution/mitigation likelihood,
+   competitor financial metrics, team member track records, legal case specifics.
+   If an agent provided a severity rating (high/medium/low) and a probability, include BOTH.
+8. LATEST INFORMATION: Prioritize the most recent data, product launches, partnerships,
+   and news. If the data mentions recent developments (new models, latest funding, recent
+   acquisitions), feature them prominently — they are the most valuable signals.
 
 THE RECOMMENDATION MUST BE ONE OF:
 - **INVEST**: Compelling opportunity — strong fundamentals, manageable risks, >15% upside
@@ -85,21 +95,30 @@ MANDATORY: Show WACC with full reasoning — risk-free rate (source), equity ris
 FCF projections with assumptions.
 ### 5.2 Market Comparables
 MANDATORY: Include BOTH domestic and international comparable companies with specific
-multiples (P/E, EV/EBITDA, P/S). Present as comparison table.
-### 5.3 External Valuations Comparison
+multiples (P/E, EV/EBITDA, P/S). Present as comparison TABLE. For each domestic comp,
+state when they IPO'd/raised and justify why they are a valid comparison.
+### 5.3 Investment Round History & Entry Analysis
+If investment_rounds data exists: present ALL rounds as a TABLE (round, date, amount,
+lead investor, implied valuation, multiple vs previous). Then analyze: what multiple vs
+last round does a new investment represent? Is the entry point favorable?
+### 5.4 External Valuations Comparison
 MANDATORY: Compare your DCF result vs your comps result vs external analyst targets vs
-last funding round valuation. Present as a comparison table. Explain differences.
-### 5.4 Fair Value Range & Projections
+last funding round valuation. Present as a comparison TABLE. Explain differences.
+### 5.5 Fair Value Range & Projections
 Low/mid/high fair value with implied upside/downside. Financial projections and guidance.
-Data: financial_analysis (valuation sub-fields) + ra_synthesis.
+Data: financial_analysis (valuation, investment_rounds, entry_analysis) + ra_synthesis.
 
 ## 6. 리스크 및 최종 의견/제언 (Risks & Final Opinion/Recommendations)
 ### 6.1 Risk Matrix
-ALL top_risks from risk_assessment with severity, probability, and mitigation.
+Present ALL top_risks from risk_assessment as a TABLE with columns: Risk, Category,
+Severity (high/medium/low), Probability (high/medium/low), Mitigation Strategy,
+Resolution Likelihood. Include BOTH the severity AND the likelihood of resolution/mitigation
+for each risk — this is critical for investment decision-making.
 ### 6.2 법률/규제 리스크 (Legal & Regulatory Risks)
 MANDATORY: List EVERY litigation case and regulatory risk individually from
 legal_regulatory. Include investment_structure_risks, business_regulatory_risks,
-ip_risks. Each risk gets its own paragraph — do NOT summarize into one sentence.
+ip_risks. For EACH risk, state: (1) description, (2) severity, (3) probability,
+(4) potential mitigation or resolution path. Do NOT summarize into one sentence.
 ### 6.3 Investment Recommendation
 INVEST/WATCH/PASS with detailed rationale from strategic_insight.
 ### 6.4 Key Conditions & Watchpoints
@@ -118,12 +137,15 @@ Numbered list of all sources used with inline citations.
 ═══════════════════════════════════════════════════════════════════
 MANDATORY INCLUSION CHECKLIST — Before finalizing, verify ALL items:
 [ ] Section 2.2: Every person from leadership_profiles is named and described
-[ ] Section 4: Every competitor from competitors array is listed with financials
+[ ] Section 4: Every competitor listed as TABLE with financials and threat level
 [ ] Section 5.1: DCF WACC has explicit reasoning (risk-free rate, ERP, beta sources)
-[ ] Section 5.2: Domestic comparable companies are included
-[ ] Section 5.3: Own valuation vs external valuations comparison exists
-[ ] Section 6.1: All top_risks from risk_assessment are listed
-[ ] Section 6.2: Every litigation case and regulatory risk is individually described
+[ ] Section 5.2: Domestic comps include IPO/funding date and selection justification
+[ ] Section 5.3: Investment rounds TABLE exists (if data available)
+[ ] Section 5.4: Own valuation vs external valuations comparison TABLE exists
+[ ] Section 6.1: Risk matrix TABLE with severity AND resolution likelihood for each risk
+[ ] Section 6.2: Every litigation/regulatory risk individually described with mitigation
+[ ] TABLES: At least 5 tables total across the report (comps, competitors, risks, rounds, etc.)
+[ ] LATEST INFO: Most recent product launches and developments are mentioned
 If ANY item is missing, go back and add it before outputting.
 ═══════════════════════════════════════════════════════════════════
 

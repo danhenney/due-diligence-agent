@@ -32,17 +32,25 @@ CRITICAL VALUATION REQUIREMENTS:
   state "WACC = 10%". Example: "risk-free rate 4.3% (10Y UST yield), equity risk premium
   5.5% (Damodaran country ERP), beta 1.2 (regression vs KOSPI), WACC = 11.2%".
 - DOMESTIC COMPS: If the company operates primarily in Korea/Asia, you MUST search for
-  and include domestic comparable companies. Use web_search to find Korean peers in the
-  same industry (e.g., AI: Nota, Upstage, Rebellions; fintech: Toss, Kakao Pay).
-  Compare multiples against both domestic and international comps.
+  and include domestic comparable companies. For EACH domestic comp, state:
+  (1) when they IPO'd or last raised funding, (2) their current valuation/multiples.
+  FILTERING CRITERIA: Only use comps that are RECENT and RELEVANT — exclude companies
+  whose IPO or last funding was 5+ years ago unless their current multiples are still
+  meaningful. Justify WHY each comp was selected or excluded.
 - EXTERNAL VALUATIONS: Search for external valuation references — analyst price targets,
   last funding round valuation, third-party estimates. Present a comparison: your DCF
   result vs your comps result vs external analyst consensus vs last funding round.
   Explain where your valuation differs and WHY.
 - FINANCIAL PROJECTIONS: Search for the company's forward guidance, sell-side consensus
   estimates, and recently announced products/models that may impact future revenue.
-- INVESTMENT ROUNDS: For private or recently-IPO companies, search for all funding
-  rounds (Series A/B/C, etc.) with dates, amounts, lead investors, and implied valuations.
+  Include the LATEST product launches, partnerships, and business developments.
+- INVESTMENT ROUNDS: For private or recently-IPO companies, search for ALL funding
+  rounds (Series A/B/C, etc.) with: dates, amounts, lead investors, implied valuations,
+  and key terms if available. Then ANALYZE:
+  (1) What is the valuation trajectory across rounds? (growth multiple between rounds)
+  (2) At what multiple vs the last round would a new investment be priced?
+  (3) Is the deal structure favorable for our entry point?
+  (4) Who are the existing investors and what does their involvement signal?
 
 QUALITY CRITERIA:
 - All data must cite explicit sources. Cross-verify with 3+ sources.
@@ -62,6 +70,8 @@ Return a JSON object with this exact structure:
     "dcf": {"fair_value": "...", "wacc": "...", "wacc_reasoning": "...", "terminal_growth": "...", "terminal_growth_reasoning": "...", "methodology": "..."},
     "market_comps": {"pe_ratio": "...", "ev_ebitda": "...", "ps_ratio": "...", "peer_comparison": "...", "domestic_comps": [{"name": "...", "metric": "...", "value": "..."}]},
     "external_valuations": {"analyst_targets": "...", "last_funding_round": "...", "third_party_estimates": "...", "comparison_summary": "..."},
+    "investment_rounds": [{"round": "...", "date": "...", "amount": "...", "lead_investor": "...", "implied_valuation": "...", "multiple_vs_previous": "..."}],
+    "entry_analysis": {"current_vs_last_round_multiple": "...", "deal_structure_assessment": "...", "investor_signal": "..."},
     "asset_based": "...",
     "fair_value_range": {"low": "...", "mid": "...", "high": "..."},
     "upside_downside": "..."

@@ -156,8 +156,8 @@ def rich_competitor(r: Any) -> dict:
 def rich_financial_analysis(r: Any) -> dict:
     return _pick_rich(r, "summary", "revenue_trend", "profitability",
                       "balance_sheet", "cash_flow", "key_ratios",
-                      "valuation", "red_flags", "strengths",
-                      "confidence_score")
+                      "valuation", "investment_rounds", "entry_analysis",
+                      "red_flags", "strengths", "confidence_score")
 
 def rich_tech(r: Any) -> dict:
     return _pick_rich(r, "summary", "core_technologies", "ip_patents",
