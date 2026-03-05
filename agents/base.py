@@ -168,7 +168,12 @@ def run_agent(
                 "use exactly those numbers — do NOT replace with 'estimated $100~150M' from web. "
                 "Web search is for CHALLENGING and CROSS-VERIFYING uploaded data, not replacing it. "
                 "If web data contradicts uploaded data, report BOTH and flag the discrepancy — "
-                "but the uploaded figures remain the primary reference."
+                "but the uploaded figures remain the primary reference.\n"
+                "HOWEVER, for SUBJECTIVE analysis (valuations, risk assessments, projections, "
+                "growth estimates, strategic opinions), you MUST form your OWN independent view. "
+                "Do NOT just copy-paste the uploaded doc's opinions or projections as your own. "
+                "Present the uploaded doc's claims, then provide YOUR independent assessment "
+                "based on cross-verified data, and explain where and why you agree or disagree."
             )
             system_prompt = system_prompt + doc_priority_note
 
