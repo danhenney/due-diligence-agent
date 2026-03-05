@@ -60,11 +60,13 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
             pytrends_tools.GOOGLE_TRENDS_RELATED_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "competitor_analysis": [
             tavily_tools.WEB_SEARCH_TOOL,
             yfinance_tools.YF_GET_INFO_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "financial_analysis": [
             yfinance_tools.YF_GET_INFO_TOOL,
@@ -74,6 +76,7 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             edgar_tools.GET_COMPANY_FACTS_TOOL,
             tavily_tools.WEB_SEARCH_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "tech_analysis": [
             tavily_tools.WEB_SEARCH_TOOL,
@@ -81,15 +84,18 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             github_tools.GITHUB_REPO_STATS_TOOL,
             patents_tools.SEARCH_PATENTS_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "legal_regulatory": [
             tavily_tools.WEB_SEARCH_TOOL,
             tavily_tools.NEWS_SEARCH_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "team_analysis": [
             tavily_tools.WEB_SEARCH_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
+            pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         # Phase 2 — Synthesis (no tools, work from Phase 1 data)
         "ra_synthesis": [],

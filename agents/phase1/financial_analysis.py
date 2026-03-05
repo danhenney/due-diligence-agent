@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import build_doc_instructions
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -114,20 +115,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     docs = state.get("uploaded_docs") or []
     is_public = state.get("is_public", True)
 
-    doc_note = ""
-    if docs:
-        doc_note = (
-            f"\nUPLOADED DOCUMENTS (PRIMARY DATA SOURCE): {', '.join(docs)}\n"
-            "STEP 0 — EXTRACT UPLOADED DATA FIRST: Call extract_pdf_text on each document "
-            "BEFORE any web search. These documents are provided by the user and contain "
-            "the most authoritative financial data (revenue, projections, valuations, etc.).\n"
-            "USE THESE NUMBERS AS YOUR BASE — they take priority over web search results.\n"
-            "THEN cross-verify and CHALLENGE these numbers with web search data:\n"
-            "- Do external sources confirm the revenue/growth figures?\n"
-            "- Are the projections realistic compared to industry benchmarks?\n"
-            "- Where do the uploaded numbers differ from public data? Flag discrepancies.\n"
-            "Do NOT just copy-paste from the documents — analyze, verify, and challenge.\n"
-        )
+    doc_note = build_doc_instructions(docs, agent_focus="financial")
 
     if is_public is False:
         data_instructions = (

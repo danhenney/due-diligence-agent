@@ -208,6 +208,78 @@ def rich_dd_questions(r: Any) -> dict:
     return _pick_rich(r, "unresolved_issues", "dd_questionnaire", "summary")
 
 
+# ── Uploaded document instruction builder ─────────────────────────────────────
+
+def build_doc_instructions(docs: list[str], agent_focus: str = "general") -> str:
+    """Build explicit per-file extraction instructions for uploaded documents.
+
+    Args:
+        docs: List of uploaded file paths.
+        agent_focus: One of "financial", "legal", "team", "tech", "market",
+                     "competitor", or "general".
+
+    Returns:
+        A string to inject into the user_message. Empty string if no docs.
+    """
+    if not docs:
+        return ""
+
+    # Build explicit per-file extraction calls
+    extract_lines = []
+    for i, doc in enumerate(docs, 1):
+        extract_lines.append(
+            f"  {i}. Call extract_pdf_text(file_path=\"{doc}\") — read the FULL document"
+        )
+        extract_lines.append(
+            f"     Then call extract_pdf_tables(file_path=\"{doc}\") — capture tables/structured data"
+        )
+    extract_block = "\n".join(extract_lines)
+
+    focus_hints = {
+        "financial": (
+            "Look for: revenue figures, financial projections, funding rounds (Seed, "
+            "Series A/B/C with dates, amounts, lead investors, pre-money and post-money "
+            "valuations), cap table, valuation models, unit economics, burn rate."
+        ),
+        "legal": (
+            "Look for: legal structure, shareholder agreements, IP assignments, "
+            "litigation history, regulatory filings, compliance certifications."
+        ),
+        "team": (
+            "Look for: leadership bios, org charts, board composition, "
+            "advisory board, key hires, founder backgrounds."
+        ),
+        "tech": (
+            "Look for: technology architecture, product specs, R&D roadmap, "
+            "patent portfolio, technical benchmarks, integration details."
+        ),
+        "market": (
+            "Look for: market size estimates (TAM/SAM/SOM), industry reports, "
+            "growth projections, customer segments, geographic data."
+        ),
+        "competitor": (
+            "Look for: competitive landscape, market share data, competitor "
+            "comparisons, positioning maps, win/loss analysis."
+        ),
+    }
+    focus = focus_hints.get(agent_focus, "Extract ALL relevant data for your analysis.")
+
+    return (
+        f"\n═══ UPLOADED DOCUMENTS — PRIMARY DATA SOURCE ═══\n"
+        f"You have {len(docs)} uploaded document(s). These are MORE AUTHORITATIVE than web search.\n"
+        f"STEP 0 — EXTRACT EVERY FILE BEFORE ANY WEB SEARCH:\n"
+        f"{extract_block}\n\n"
+        f"WHAT TO LOOK FOR:\n{focus}\n\n"
+        f"RULES:\n"
+        f"- Extract ALL {len(docs)} file(s) — do NOT skip any document\n"
+        f"- USE THESE NUMBERS AS YOUR BASE — they override web search results\n"
+        f"- THEN cross-verify and CHALLENGE with web search data\n"
+        f"- Flag discrepancies between uploaded data and web data\n"
+        f"- Do NOT just copy-paste — analyze, verify, and challenge\n"
+        f"═══════════════════════════════════════════════════\n"
+    )
+
+
 # ── Serializer ────────────────────────────────────────────────────────────────
 
 def compact(data: Any) -> str:

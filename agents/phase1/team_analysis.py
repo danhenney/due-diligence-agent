@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
+from agents.context import build_doc_instructions
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -79,14 +80,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         "Use news_search for recent leadership changes and company culture signals.\n"
     )
 
-    doc_note = ""
-    if docs:
-        doc_note = (
-            f"\nUPLOADED DOCUMENTS (PRIMARY DATA SOURCE): {', '.join(docs)}\n"
-            "Extract data using extract_pdf_text FIRST. Use these numbers as your base, "
-            "then cross-verify with web search. Flag any discrepancies. "
-            "Do NOT just copy-paste — analyze and challenge the data.\n"
-        )
+    doc_note = build_doc_instructions(docs, agent_focus="team")
 
     user_message = (
         f"Company: {company}\nURL: {url}{doc_note}\n\n"
