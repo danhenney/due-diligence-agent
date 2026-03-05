@@ -7,16 +7,21 @@ from typing import Any
 import fitz  # PyMuPDF
 
 
+_MAX_TEXT_CHARS = 18_000  # keep under the 20K tool result cap in base.py
+
+
 def extract_pdf_text(file_path: str, page_range: str | None = None) -> dict[str, Any]:
     """Extract text from a PDF file.
 
     Args:
         file_path: Path to the PDF file.
         page_range: Optional page range string like "1-5" or "3" (1-indexed).
-                    If None, extracts all pages.
+                    If None, extracts all pages (auto-truncates with warning).
 
     Returns:
         Dict with keys: file, total_pages, extracted_pages, text.
+        If the document is too large, includes 'warning' with instructions
+        to call again with page_range for remaining pages.
     """
     try:
         doc = fitz.open(file_path)
@@ -30,10 +35,34 @@ def extract_pdf_text(file_path: str, page_range: str | None = None) -> dict[str,
             pages_to_extract = _parse_page_range(page_range, total_pages)
 
         texts = []
+        last_extracted = 0
+        total_chars = 0
         for page_num in pages_to_extract:
             if 0 <= page_num < total_pages:
                 page = doc[page_num]
-                texts.append(f"[Page {page_num + 1}]\n{page.get_text()}")
+                page_text = f"[Page {page_num + 1}]\n{page.get_text()}"
+                if total_chars + len(page_text) > _MAX_TEXT_CHARS and texts:
+                    # Would exceed limit — stop here and warn
+                    doc.close()
+                    remaining_start = page_num + 1  # 0-indexed
+                    remaining_end = pages_to_extract[-1] + 1
+                    return {
+                        "file": file_path,
+                        "total_pages": total_pages,
+                        "extracted_pages": [p + 1 for p in pages_to_extract[:len(texts)]],
+                        "text": "\n\n".join(texts),
+                        "warning": (
+                            f"DOCUMENT TOO LARGE — only extracted pages 1-{page_num}. "
+                            f"Pages {remaining_start + 1}-{remaining_end} were NOT read. "
+                            f"You MUST call extract_pdf_text again with "
+                            f"page_range=\"{remaining_start + 1}-{remaining_end}\" "
+                            f"to read the remaining pages. Do NOT skip them — they may "
+                            f"contain critical data (investment rounds, valuations, etc.)."
+                        ),
+                    }
+                texts.append(page_text)
+                total_chars += len(page_text)
+                last_extracted = page_num
 
         doc.close()
         return {
