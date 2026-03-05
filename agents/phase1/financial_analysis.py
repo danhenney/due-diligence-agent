@@ -93,10 +93,16 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     doc_note = ""
     if docs:
         doc_note = (
-            f"\nUPLOADED DOCUMENTS (HIGH PRIORITY): {', '.join(docs)}\n"
-            "These contain key data provided by the user — often more informative than "
-            "public sources. Extract ALL relevant financial data using extract_pdf_text "
-            "BEFORE web search. Include findings from these documents in your analysis.\n"
+            f"\nUPLOADED DOCUMENTS (PRIMARY DATA SOURCE): {', '.join(docs)}\n"
+            "STEP 0 — EXTRACT UPLOADED DATA FIRST: Call extract_pdf_text on each document "
+            "BEFORE any web search. These documents are provided by the user and contain "
+            "the most authoritative financial data (revenue, projections, valuations, etc.).\n"
+            "USE THESE NUMBERS AS YOUR BASE — they take priority over web search results.\n"
+            "THEN cross-verify and CHALLENGE these numbers with web search data:\n"
+            "- Do external sources confirm the revenue/growth figures?\n"
+            "- Are the projections realistic compared to industry benchmarks?\n"
+            "- Where do the uploaded numbers differ from public data? Flag discrepancies.\n"
+            "Do NOT just copy-paste from the documents — analyze, verify, and challenge.\n"
         )
 
     if is_public is False:

@@ -82,10 +82,10 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     doc_note = ""
     if docs:
         doc_note = (
-            f"\nUPLOADED DOCUMENTS: {', '.join(docs)}\n"
-            "These contain key data from the user. Extract team/leadership info "
-            "using extract_pdf_text BEFORE web search. Uploaded materials are often "
-            "more informative than public sources.\n"
+            f"\nUPLOADED DOCUMENTS (PRIMARY DATA SOURCE): {', '.join(docs)}\n"
+            "Extract data using extract_pdf_text FIRST. Use these numbers as your base, "
+            "then cross-verify with web search. Flag any discrepancies. "
+            "Do NOT just copy-paste — analyze and challenge the data.\n"
         )
 
     user_message = (

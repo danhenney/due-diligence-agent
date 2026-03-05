@@ -12,12 +12,15 @@ the company operates in, and build a comprehensive comparison matrix.
 
 Focus on:
 1. Competitor identification across all business model lines (direct + indirect)
-2. Comparison matrix covering: product/service, pricing, financials, market share, talent
-3. Competitive positioning map — where does the target company sit?
-4. Competitive advantages and moats for each player
-5. Recent competitive dynamics (M&A, new entrants, exits)
-6. Market share trends (gaining or losing share?)
-7. Pricing power analysis
+2. MUST include competitors from the SAME COUNTRY/REGION and SAME SECTOR as the target.
+   If the target is a Korean AI company, search for Korean AI competitors specifically.
+   Also include major international competitors for a complete picture.
+3. Comparison matrix covering: product/service, pricing, financials, market share, talent
+4. Competitive positioning map — where does the target company sit?
+5. Competitive advantages and moats for each player
+6. Recent competitive dynamics (M&A, new entrants, exits)
+7. Market share trends (gaining or losing share?)
+8. Pricing power analysis
 
 QUALITY CRITERIA:
 - All data must cite explicit sources. Cross-verify with 3+ sources.
@@ -78,10 +81,10 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     doc_note = ""
     if docs:
         doc_note = (
-            f"\nUPLOADED DOCUMENTS: {', '.join(docs)}\n"
-            "These contain key data from the user. Extract competitor mentions "
-            "using extract_pdf_text BEFORE web search. Uploaded materials are often "
-            "more informative than public sources.\n"
+            f"\nUPLOADED DOCUMENTS (PRIMARY DATA SOURCE): {', '.join(docs)}\n"
+            "Extract data using extract_pdf_text FIRST. Use these numbers as your base, "
+            "then cross-verify with web search. Flag any discrepancies. "
+            "Do NOT just copy-paste — analyze and challenge the data.\n"
         )
 
     user_message = (
