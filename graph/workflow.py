@@ -145,12 +145,15 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
                     result, usage = future.result()
                     merged.update(result)
                     agent_usage[name] = usage
+                    print(f"[phase1] {name}: input={usage.get('input_tokens',0)}, output={usage.get('output_tokens',0)}")
                 except Exception as exc:
                     errors.append(f"{name} failed: {exc}")
+                    print(f"[phase1] {name} FAILED: {exc}")
 
     merged["__agent_usage__"] = agent_usage
     if errors:
         merged["errors"] = errors
+    print(f"[phase1] Total agents with usage: {len(agent_usage)}, errors: {len(errors)}")
 
     return merged
 
