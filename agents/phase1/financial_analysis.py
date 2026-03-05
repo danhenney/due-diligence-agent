@@ -52,6 +52,24 @@ CRITICAL VALUATION REQUIREMENTS:
   (3) Is the deal structure favorable for our entry point?
   (4) Who are the existing investors and what does their involvement signal?
 
+CURRENCY HANDLING:
+- If uploaded documents contain BOTH KRW and USD figures, cross-check them.
+  Derive the implied exchange rate (e.g., revenue 270억원 and $17.8M → rate = 1,516 KRW/USD).
+  State which currency you use as primary and the exchange rate applied.
+- Always present key figures in BOTH currencies when the company operates cross-border.
+
+FINANCIAL RATIO CALCULATION:
+- When uploaded documents provide raw financial data (revenue, COGS, operating income,
+  net income, etc.), CALCULATE ratios yourself: operating margin, net margin, EBITDA margin,
+  revenue growth rate, etc. Do NOT just report what the document says — compute and verify.
+
+UPLOADED DOCUMENT SOURCE TYPE:
+- If the uploaded document appears to be from a broker, investment bank, or fund manager
+  (fundraising materials, pitch deck, IM), flag this in your summary. Their projections
+  and valuations may be optimistic. Extract ALL their claims (revenue projections, TAM,
+  valuation, round details including pre-money and post-money) but flag them as
+  "source claims" that need independent verification.
+
 QUALITY CRITERIA:
 - All data must cite explicit sources. Cross-verify with 3+ sources.
 - All figures must come from live tool calls, not training memory.
@@ -76,6 +94,12 @@ Return a JSON object with this exact structure:
     "fair_value_range": {"low": "...", "mid": "...", "high": "..."},
     "upside_downside": "..."
   },
+  "source_claims_verification": {
+    "source_type": "broker|fund|company|public",
+    "key_claims": [{"claim": "...", "our_verification": "confirmed|disputed|unverifiable", "details": "..."}],
+    "optimism_bias_assessment": "..."
+  },
+  "currency_note": {"primary_currency": "...", "exchange_rate_used": "...", "cross_check": "..."},
   "red_flags": ["..."],
   "strengths": ["..."],
   "confidence_score": 0.0,

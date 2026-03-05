@@ -31,9 +31,12 @@ WRITING PRINCIPLES:
 3. BALANCED: Present both bull and bear cases fairly
 4. ACTIONABLE: Every section should help the reader make a decision
 5. STRUCTURED: Follow the 6-section report structure below
-6. TABLE-DRIVEN: Use Markdown tables liberally for key comparisons — competitor matrix,
-   domestic vs international comps, valuation comparison, risk matrix, investment rounds.
-   Tables make the report scannable. Each major section should have at least one table.
+6. HEADLINE → TABLE → DETAIL structure: Every section should follow this pattern:
+   (a) A bold headline message summarizing the key takeaway (1-2 sentences)
+   (b) A Markdown TABLE with the key data points
+   (c) Detailed prose expanding on the table with analysis and opinions
+   This makes the report scannable — a reader should understand the key message from
+   just the headlines and tables without reading the prose.
 7. DETAIL FROM AGENTS: Do NOT summarize agent findings into vague one-liners. Transfer
    the SPECIFIC details — risk severity levels AND resolution/mitigation likelihood,
    competitor financial metrics, team member track records, legal case specifics.
@@ -104,9 +107,16 @@ last round does a new investment represent? Is the entry point favorable?
 ### 5.4 External Valuations Comparison
 MANDATORY: Compare your DCF result vs your comps result vs external analyst targets vs
 last funding round valuation. Present as a comparison TABLE. Explain differences.
-### 5.5 Fair Value Range & Projections
+### 5.5 외부 자료 검증 (Source Claims vs Our Verification)
+If source_claims_verification data exists (uploaded doc was from a broker/fund/IM):
+Present a TABLE comparing their claims vs our model's verification:
+| Claim | Source Says | Our Verification | Status (Confirmed/Disputed/Unverifiable) |
+Include optimism_bias_assessment. This section is CRITICAL for investment committee.
+### 5.6 Fair Value Range & Projections
 Low/mid/high fair value with implied upside/downside. Financial projections and guidance.
-Data: financial_analysis (valuation, investment_rounds, entry_analysis) + ra_synthesis.
+If currency_note exists, state the primary currency and exchange rate used.
+Data: financial_analysis (valuation, investment_rounds, entry_analysis,
+source_claims_verification, currency_note) + ra_synthesis.
 
 ## 6. 리스크 및 최종 의견/제언 (Risks & Final Opinion/Recommendations)
 ### 6.1 Risk Matrix
@@ -140,12 +150,15 @@ MANDATORY INCLUSION CHECKLIST — Before finalizing, verify ALL items:
 [ ] Section 4: Every competitor listed as TABLE with financials and threat level
 [ ] Section 5.1: DCF WACC has explicit reasoning (risk-free rate, ERP, beta sources)
 [ ] Section 5.2: Domestic comps include IPO/funding date and selection justification
-[ ] Section 5.3: Investment rounds TABLE exists (if data available)
+[ ] Section 5.3: Investment rounds TABLE with pre/post-money valuations (if data available)
 [ ] Section 5.4: Own valuation vs external valuations comparison TABLE exists
+[ ] Section 5.5: Source claims vs verification TABLE exists (if uploaded doc from broker/fund)
 [ ] Section 6.1: Risk matrix TABLE with severity AND resolution likelihood for each risk
 [ ] Section 6.2: Every litigation/regulatory risk individually described with mitigation
-[ ] TABLES: At least 5 tables total across the report (comps, competitors, risks, rounds, etc.)
+[ ] TABLES: At least 5 tables total (comps, competitors, risks, rounds, claims verification)
+[ ] FORMAT: Every section uses headline → table → detail structure
 [ ] LATEST INFO: Most recent product launches and developments are mentioned
+[ ] CURRENCY: If dual currency, exchange rate stated and figures in both currencies
 If ANY item is missing, go back and add it before outputting.
 ═══════════════════════════════════════════════════════════════════
 
