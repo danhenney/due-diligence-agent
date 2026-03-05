@@ -14,7 +14,11 @@ from tools.executor import execute_tool_call
 
 # ── Context-window safety ─────────────────────────────────────────────────────
 _MAX_CONTEXT_CHARS = 550_000  # ~160K tokens (Korean ≈ 3.5 chars/token)
-_MAX_TOOL_RESULT_CHARS = 4_000  # cap each individual tool result
+_MAX_TOOL_RESULT_CHARS = 4_000  # cap each web/API tool result
+_MAX_PDF_RESULT_CHARS = 20_000  # higher cap for uploaded PDF content
+# PDF tools must NOT be truncated at 4K — user-uploaded docs often have
+# critical data (investment rounds, valuations) deep in the document.
+_PDF_TOOLS = frozenset({"extract_pdf_text", "extract_pdf_tables"})
 
 _client: anthropic.Anthropic | None = None
 
@@ -240,8 +244,11 @@ def run_agent(
                 except Exception as exc:
                     result = json.dumps({"error": str(exc)})
                 # Cap each tool result to prevent context blowup
-                if isinstance(result, str) and len(result) > _MAX_TOOL_RESULT_CHARS:
-                    result = result[:_MAX_TOOL_RESULT_CHARS] + "\n[…truncated]"
+                # PDF tools get a higher limit — uploaded docs have critical
+                # data (investment rounds, valuations) that must not be cut
+                cap = _MAX_PDF_RESULT_CHARS if tb.name in _PDF_TOOLS else _MAX_TOOL_RESULT_CHARS
+                if isinstance(result, str) and len(result) > cap:
+                    result = result[:cap] + "\n[…truncated]"
                 tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": tb.id,
