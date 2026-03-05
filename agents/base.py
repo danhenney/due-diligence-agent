@@ -66,7 +66,11 @@ def _estimate_chars(system: str, messages: list[dict]) -> int:
 
 
 def _trim_oldest_tool_results(messages: list[dict], system: str) -> None:
-    """Trim tool result contents in-place, oldest first, until under budget."""
+    """Trim tool result contents in-place, oldest first, until under budget.
+
+    NEVER trims PDF tool results — uploaded documents are the primary data
+    source and must be preserved in full throughout the conversation.
+    """
     while _estimate_chars(system, messages) > _MAX_CONTEXT_CHARS:
         trimmed_any = False
         for msg in messages:
@@ -75,6 +79,9 @@ def _trim_oldest_tool_results(messages: list[dict], system: str) -> None:
                 continue
             for block in content:
                 if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                # Skip PDF results — they must never be trimmed
+                if block.get("_pdf_tool"):
                     continue
                 c = block.get("content", "")
                 if isinstance(c, str) and len(c) > 200:
@@ -246,14 +253,18 @@ def run_agent(
                 # Cap each tool result to prevent context blowup
                 # PDF tools get a higher limit — uploaded docs have critical
                 # data (investment rounds, valuations) that must not be cut
-                cap = _MAX_PDF_RESULT_CHARS if tb.name in _PDF_TOOLS else _MAX_TOOL_RESULT_CHARS
+                is_pdf = tb.name in _PDF_TOOLS
+                cap = _MAX_PDF_RESULT_CHARS if is_pdf else _MAX_TOOL_RESULT_CHARS
                 if isinstance(result, str) and len(result) > cap:
                     result = result[:cap] + "\n[…truncated]"
-                tool_results.append({
+                tr = {
                     "type":        "tool_result",
                     "tool_use_id": tb.id,
                     "content":     result,
-                })
+                }
+                if is_pdf:
+                    tr["_pdf_tool"] = True  # protect from safety-net trimming
+                tool_results.append(tr)
             messages.append({"role": "user", "content": tool_results})
             continue
 
