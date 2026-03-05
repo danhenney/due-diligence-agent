@@ -154,11 +154,19 @@ def rich_competitor(r: Any) -> dict:
                       "red_flags", "strengths", "confidence_score")
 
 def rich_financial_analysis(r: Any) -> dict:
-    return _pick_rich(r, "summary", "revenue_trend", "profitability",
-                      "balance_sheet", "cash_flow", "key_ratios",
-                      "valuation", "investment_rounds", "entry_analysis",
-                      "source_claims_verification", "currency_note",
-                      "red_flags", "strengths", "confidence_score")
+    d = _pick_rich(r, "summary", "revenue_trend", "profitability",
+                   "balance_sheet", "cash_flow", "key_ratios",
+                   "valuation", "entry_analysis",
+                   "source_claims_verification", "currency_note",
+                   "red_flags", "strengths", "confidence_score")
+    # Investment rounds get a HIGHER trim limit — each round is a critical
+    # data point from uploaded docs (pre/post money, investors, dates).
+    # Must not be truncated to 5 items or 600 chars.
+    if isinstance(r, dict) and "investment_rounds" in r:
+        d["investment_rounds"] = _deep_trim(
+            r["investment_rounds"], max_str=800, max_list=15
+        )
+    return d
 
 def rich_tech(r: Any) -> dict:
     return _pick_rich(r, "summary", "core_technologies", "ip_patents",

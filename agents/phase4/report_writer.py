@@ -116,9 +116,12 @@ MANDATORY: Include BOTH domestic and international comparable companies with spe
 multiples (P/E, EV/EBITDA, P/S). Present as comparison TABLE. For each domestic comp,
 state when they IPO'd/raised and justify why they are a valid comparison.
 ### 5.3 Investment Round History & Entry Analysis
-If investment_rounds data exists: present ALL rounds as a TABLE (round, date, amount,
-lead investor, implied valuation, multiple vs previous). Then analyze: what multiple vs
-last round does a new investment represent? Is the entry point favorable?
+MANDATORY if investment_rounds data exists: present ALL rounds as a TABLE with columns:
+| Round | Date | Amount | Lead Investor | Pre-Money | Post-Money | Multiple vs Previous |
+This data typically comes from UPLOADED DOCUMENTS — it is the most reliable source.
+Do NOT omit or summarize rounds. List EVERY round individually (Seed, Series A, B, C, etc.).
+Then analyze: what multiple vs last round does a new investment represent?
+Is the entry point favorable? Who are the key investors and what does their involvement signal?
 ### 5.4 External Valuations Comparison
 MANDATORY: Compare your DCF result vs your comps result vs external analyst targets vs
 last funding round valuation. Present as a comparison TABLE. Explain differences.

@@ -45,9 +45,15 @@ CRITICAL VALUATION REQUIREMENTS:
 - FINANCIAL PROJECTIONS: Search for the company's forward guidance, sell-side consensus
   estimates, and recently announced products/models that may impact future revenue.
   Include the LATEST product launches, partnerships, and business developments.
-- INVESTMENT ROUNDS: For private or recently-IPO companies, search for ALL funding
-  rounds (Series A/B/C, etc.) with: dates, amounts, lead investors, implied valuations,
-  and key terms if available. Then ANALYZE:
+- INVESTMENT ROUNDS (CRITICAL — often in uploaded documents):
+  UPLOADED DOCUMENTS frequently contain detailed funding history with pre-money and
+  post-money valuations, lead investors, and round sizes. This is the MOST RELIABLE
+  source for round data. Extract EVERY round from the uploaded docs FIRST, then
+  supplement with web search.
+  For EACH round, you MUST output: round name, date, amount raised, lead investor(s),
+  pre-money valuation, post-money valuation, and multiple vs previous round.
+  Do NOT skip any round. Do NOT summarize multiple rounds into one line.
+  Then ANALYZE:
   (1) What is the valuation trajectory across rounds? (growth multiple between rounds)
   (2) At what multiple vs the last round would a new investment be priced?
   (3) Is the deal structure favorable for our entry point?
