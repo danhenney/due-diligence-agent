@@ -45,14 +45,14 @@ def _pick(d: Any, *keys: str) -> dict:
 # here — report_writer collects them separately via _collect_all_sources().
 
 def slim_market_analysis(r: Any) -> dict:
-    d = _pick(r, "summary", "tam", "cagr",
+    d = _pick(r, "summary", "business_lines", "tam", "cagr",
               "red_flags", "strengths", "confidence_score")
     if "summary" in d:
         d["summary"] = _deep_trim(d["summary"], max_str=800)
     return d
 
 def slim_competitor(r: Any) -> dict:
-    d = _pick(r, "summary", "competitors",
+    d = _pick(r, "summary", "competitors_by_bm", "competitors", "moat_assessment",
               "red_flags", "strengths", "confidence_score")
     return d
 
@@ -62,16 +62,17 @@ def slim_financial_analysis(r: Any) -> dict:
     return d
 
 def slim_tech(r: Any) -> dict:
-    d = _pick(r, "summary", "core_technologies",
+    d = _pick(r, "summary", "tech_by_bm", "core_technologies", "tech_risks",
               "red_flags", "strengths", "confidence_score")
     return d
 
 def slim_legal_regulatory(r: Any) -> dict:
-    d = _pick(r, "summary", "red_flags", "strengths", "confidence_score")
+    d = _pick(r, "summary", "litigation", "governance",
+              "red_flags", "strengths", "confidence_score")
     return d
 
 def slim_team(r: Any) -> dict:
-    d = _pick(r, "summary", "key_person_risk",
+    d = _pick(r, "summary", "key_person_risk", "board",
               "red_flags", "strengths", "confidence_score")
     return d
 
@@ -131,13 +132,16 @@ def _pick_rich(d: Any, *keys: str) -> dict:
 
 
 def rich_market_analysis(r: Any) -> dict:
-    return _pick_rich(r, "summary", "tam", "sam", "som", "cagr",
-                      "trends", "market_drivers", "geographic_breakdown",
+    return _pick_rich(r, "summary", "business_lines", "tam", "sam", "som", "cagr",
+                      "trends", "market_drivers", "market_inhibitors",
+                      "geographic_breakdown", "demand_analysis", "supply_analysis",
+                      "regulatory_impact",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_competitor(r: Any) -> dict:
-    return _pick_rich(r, "summary", "competitors", "market_share",
-                      "comparison_matrix", "competitive_gaps",
+    return _pick_rich(r, "summary", "competitors_by_bm", "competitors",
+                      "comparison_matrix", "moat_assessment", "market_share",
+                      "competitive_dynamics", "competitive_gaps",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_financial_analysis(r: Any) -> dict:
@@ -156,20 +160,22 @@ def rich_financial_analysis(r: Any) -> dict:
     return d
 
 def rich_tech(r: Any) -> dict:
-    return _pick_rich(r, "summary", "core_technologies", "ip_patents",
-                      "tech_maturity", "red_flags", "strengths",
-                      "confidence_score")
+    return _pick_rich(r, "summary", "tech_by_bm", "core_technologies",
+                      "ip_patents", "tech_maturity", "competitive_comparison",
+                      "tech_risks", "scalability", "rd_investment", "latest_products",
+                      "red_flags", "strengths", "confidence_score")
 
 def rich_legal_regulatory(r: Any) -> dict:
     return _pick_rich(r, "summary", "investment_structure_risks",
                       "business_regulatory_risks", "litigation",
-                      "ip_risks", "regulatory_compliance",
+                      "ip_risks", "regulatory_compliance", "governance",
+                      "esg_exposure",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_team(r: Any) -> dict:
-    return _pick_rich(r, "summary", "leadership_profiles",
+    return _pick_rich(r, "summary", "leadership_profiles", "board",
                       "capability_assessment", "departure_history",
-                      "key_person_risk", "culture_signals",
+                      "key_person_risk", "culture_signals", "compensation",
                       "red_flags", "strengths", "confidence_score")
 
 def rich_ra_synthesis(r: Any) -> dict:

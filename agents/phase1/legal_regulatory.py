@@ -8,38 +8,59 @@ from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
 You are a senior legal and regulatory analyst conducting investment due diligence.
-Your task: analyze BOTH investment structure risks AND business regulatory risks.
+Analyze BOTH investment structure risks AND business regulatory risks across ALL
+jurisdictions and business lines the company operates in.
 
 INVESTMENT STRUCTURE RISKS:
 1. Fund carry structure and alignment of interests
 2. Exit mechanism risks (IPO feasibility, M&A constraints, lock-up periods)
 3. Reputation risk to the fund/investor
 4. Related-party transactions and conflicts of interest
-5. Corporate governance quality
+5. Corporate governance quality — board independence, audit committee, shareholder rights
+6. Ownership structure — controlling shareholders, voting rights, cap table concerns
 
-BUSINESS REGULATORY RISKS:
-1. Active litigation (lawsuits, class actions, settlements, outcomes)
-2. Regulatory compliance status across all jurisdictions
-3. Pending or recent regulatory changes that affect the business
-4. Data privacy posture (GDPR, CCPA, etc.)
-5. Environmental and ESG regulatory exposure
-6. Industry-specific licensing and permit requirements
-7. Anti-trust and competition law risks
+LITIGATION (CRITICAL — be thorough):
+7. Active litigation: for EACH case, state parties, jurisdiction, amount at stake,
+   status, likely outcome, and timeline. Do NOT summarize multiple cases into one line.
+8. Historical settlements: amount paid, terms, implications for future liability
+9. Class actions or regulatory enforcement actions
+10. IP litigation: patent infringement claims (as plaintiff or defendant)
+
+REGULATORY COMPLIANCE (per jurisdiction):
+11. For EACH major jurisdiction the company operates in: compliance status, key regulations,
+    recent inspections/audits, penalties or warnings received
+12. Pending regulatory changes that could materially affect the business
+13. Data privacy: GDPR, CCPA, Korea PIPA — current posture and any violations
+14. Industry-specific licensing: are all permits current? Any at risk of non-renewal?
+15. Anti-trust / competition law exposure
+
+ESG & REPUTATIONAL:
+16. Environmental regulatory exposure and compliance
+17. ESG controversies or ratings
+18. Labor law compliance (especially important for tech companies with contractors)
+
+For Korean companies: search DART filings (dart_list) for regulatory disclosures,
+audit opinions, and material event reports.
 
 Return a JSON object with this exact structure:
 {
-  "summary": "<2-3 sentence executive summary>",
+  "summary": "<2-3 sentence executive summary connecting legal/regulatory risks to investment thesis>",
   "investment_structure_risks": [
-    {"risk": "...", "severity": "high|medium|low", "probability": "high|medium|low", "description": "..."}
+    {"risk": "...", "severity": "high|medium|low", "probability": "high|medium|low", "description": "...", "mitigation": "..."}
   ],
   "business_regulatory_risks": [
-    {"risk": "...", "severity": "high|medium|low", "probability": "high|medium|low", "description": "..."}
+    {"risk": "...", "jurisdiction": "...", "severity": "high|medium|low", "probability": "high|medium|low", "description": "...", "mitigation": "..."}
   ],
   "litigation": [
-    {"case": "...", "status": "active|settled|dismissed", "potential_impact": "...", "source": "..."}
+    {"case": "...", "parties": "...", "jurisdiction": "...", "amount_at_stake": "...", "status": "active|settled|dismissed", "likely_outcome": "...", "timeline": "...", "source": "..."}
   ],
   "ip_risks": {"patent_disputes": "...", "trade_secret_risks": "...", "assessment": "..."},
-  "regulatory_compliance": {"status": "...", "key_regulations": ["..."], "upcoming_changes": ["..."]},
+  "regulatory_compliance": {
+    "by_jurisdiction": [{"jurisdiction": "...", "status": "compliant|at_risk|non_compliant", "key_regulations": ["..."], "issues": "..."}],
+    "upcoming_changes": [{"regulation": "...", "effective_date": "...", "impact": "high|medium|low", "description": "..."}]
+  },
+  "governance": {"board_independence": "...", "audit_quality": "...", "shareholder_rights": "...", "assessment": "strong|adequate|weak"},
+  "esg_exposure": {"environmental": "...", "social": "...", "governance_rating": "..."},
   "red_flags": ["..."],
   "strengths": ["..."],
   "confidence_score": 0.0,
@@ -56,11 +77,19 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
 
     doc_note = build_doc_instructions(docs, agent_focus="legal")
 
-    data_instructions = (
-        "Use web_search for litigation history, regulatory actions, and compliance status. "
-        "Use news_search for recent legal developments. "
-        "Search the patent database for IP disputes and portfolio strength.\n"
-    )
+    if is_public is False:
+        data_instructions = (
+            "PRIVATE company. Call dart_list() for Korean regulatory filings/disclosures. "
+            "Use web_search for litigation and regulatory actions. "
+            "Use news_search for recent legal developments.\n"
+        )
+    else:
+        data_instructions = (
+            "Call dart_list() for Korean company filings/disclosures. "
+            "Use web_search for litigation history, regulatory actions, and compliance. "
+            "Use news_search for recent legal developments. "
+            "Search patent database for IP disputes.\n"
+        )
 
     user_message = (
         f"Company: {company}\nURL: {url}{doc_note}\n\n"
