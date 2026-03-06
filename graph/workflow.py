@@ -49,9 +49,17 @@ from agents.context import (
 log = logging.getLogger(__name__)
 
 
+_AGENT_TIMEOUT_SEC = 600  # 10-minute timeout per agent
+
+
 def _run_agent_with_usage(fn, state: Any) -> tuple[dict, dict]:
     """Run an agent function and return (result, token_usage) tuple."""
-    result = fn(state)
+    try:
+        result = fn(state)
+    except Exception:
+        # Capture any tokens consumed before the crash
+        get_and_reset_usage()
+        raise
     usage = get_and_reset_usage()
     return result, usage
 
@@ -142,7 +150,7 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
             for future in as_completed(future_to_name):
                 name = future_to_name[future]
                 try:
-                    result, usage = future.result()
+                    result, usage = future.result(timeout=_AGENT_TIMEOUT_SEC)
                     merged.update(result)
                     agent_usage[name] = usage
                     log.info("[phase1] %s: input=%d, output=%d", name, usage.get('input_tokens', 0), usage.get('output_tokens', 0))
@@ -190,7 +198,7 @@ def phase2_parallel(state: DueDiligenceState) -> dict:
         for future in as_completed(future_to_name):
             name = future_to_name[future]
             try:
-                result, usage = future.result()
+                result, usage = future.result(timeout=_AGENT_TIMEOUT_SEC)
                 merged.update(result)
                 agent_usage[name] = usage
             except Exception as exc:
@@ -302,15 +310,17 @@ def selective_rerun(state: DueDiligenceState) -> dict:
     }
 
     for agent_name in weak_agents:
-        if agent_name in agent_map:
-            log.info("Selective rerun: re-running %s (loop %d)", agent_name, loop_count)
-            try:
-                brief = revision_briefs.get(agent_name, "")
-                result = agent_map[agent_name](state, revision_brief=brief)
-                merged.update(result)
-            except Exception as exc:
-                log.warning("Selective rerun: %s failed: %s", agent_name, exc)
-                merged.setdefault("errors", []).append(f"selective_rerun {agent_name} failed: {exc}")
+        if agent_name not in agent_map:
+            log.warning("Selective rerun: unknown agent '%s' — skipping", agent_name)
+            continue
+        log.info("Selective rerun: re-running %s (loop %d)", agent_name, loop_count)
+        try:
+            brief = revision_briefs.get(agent_name, "")
+            result = agent_map[agent_name](state, revision_brief=brief)
+            merged.update(result)
+        except Exception as exc:
+            log.warning("Selective rerun: %s failed: %s", agent_name, exc)
+            merged.setdefault("errors", []).append(f"selective_rerun {agent_name} failed: {exc}")
 
     return merged
 

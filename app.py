@@ -1,5 +1,6 @@
 """Streamlit web UI for the Due Diligence Agent."""
 import os
+import logging
 import shutil
 import tempfile
 import threading
@@ -252,8 +253,8 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         try:
             pptx_path = pptx_report.generate_pptx(state, job_id, output_dir=tmp_dir)
             pptx_storage = upload_file(job_id, pptx_path, folder="pptx")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning("PPTX generation failed for %s: %s", job_id, exc)
 
         # Generate DOCX + upload to Supabase
         docx_storage = None
@@ -261,8 +262,8 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             import docx_report
             docx_path = docx_report.generate_docx(state, job_id, output_dir=tmp_dir)
             docx_storage = upload_file(job_id, docx_path, folder="docx")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning("DOCX generation failed for %s: %s", job_id, exc)
 
         save_history_entry({
             "id": job_id,
@@ -295,8 +296,8 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                     agent_outputs[key] = val
             if agent_outputs:
                 update_job(job_id, {"agent_outputs": agent_outputs})
-        except Exception:
-            pass  # Don't let agent_outputs failure break the completed job
+        except Exception as exc:
+            logging.warning("Agent outputs persist failed for %s: %s", job_id, exc)
 
     except _Cancelled:
         update_job(job_id, {"status": "cancelled"})

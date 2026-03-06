@@ -25,52 +25,53 @@ def extract_pdf_text(file_path: str, page_range: str | None = None) -> dict[str,
     """
     try:
         doc = fitz.open(file_path)
-        total_pages = len(doc)
+        try:
+            total_pages = len(doc)
 
-        # Parse page range
-        pages_to_extract: list[int]
-        if page_range is None:
-            pages_to_extract = list(range(total_pages))
-        else:
-            pages_to_extract = _parse_page_range(page_range, total_pages)
+            # Parse page range
+            pages_to_extract: list[int]
+            if page_range is None:
+                pages_to_extract = list(range(total_pages))
+            else:
+                pages_to_extract = _parse_page_range(page_range, total_pages)
 
-        texts = []
-        last_extracted = 0
-        total_chars = 0
-        for page_num in pages_to_extract:
-            if 0 <= page_num < total_pages:
-                page = doc[page_num]
-                page_text = f"[Page {page_num + 1}]\n{page.get_text()}"
-                if total_chars + len(page_text) > _MAX_TEXT_CHARS and texts:
-                    # Would exceed limit — stop here and warn
-                    doc.close()
-                    remaining_start = page_num + 1  # 0-indexed
-                    remaining_end = pages_to_extract[-1] + 1
-                    return {
-                        "file": file_path,
-                        "total_pages": total_pages,
-                        "extracted_pages": [p + 1 for p in pages_to_extract[:len(texts)]],
-                        "text": "\n\n".join(texts),
-                        "warning": (
-                            f"DOCUMENT TOO LARGE — only extracted pages 1-{page_num}. "
-                            f"Pages {remaining_start + 1}-{remaining_end} were NOT read. "
-                            f"You MUST call extract_pdf_text again with "
-                            f"page_range=\"{remaining_start + 1}-{remaining_end}\" "
-                            f"to read the remaining pages. Do NOT skip them — they may "
-                            f"contain critical data (investment rounds, valuations, etc.)."
-                        ),
-                    }
-                texts.append(page_text)
-                total_chars += len(page_text)
-                last_extracted = page_num
+            texts = []
+            last_extracted = 0
+            total_chars = 0
+            for page_num in pages_to_extract:
+                if 0 <= page_num < total_pages:
+                    page = doc[page_num]
+                    page_text = f"[Page {page_num + 1}]\n{page.get_text()}"
+                    if total_chars + len(page_text) > _MAX_TEXT_CHARS and texts:
+                        # Would exceed limit — stop here and warn
+                        remaining_start = page_num + 1  # 0-indexed
+                        remaining_end = pages_to_extract[-1] + 1
+                        return {
+                            "file": file_path,
+                            "total_pages": total_pages,
+                            "extracted_pages": [p + 1 for p in pages_to_extract[:len(texts)]],
+                            "text": "\n\n".join(texts),
+                            "warning": (
+                                f"DOCUMENT TOO LARGE — only extracted pages 1-{page_num}. "
+                                f"Pages {remaining_start + 1}-{remaining_end} were NOT read. "
+                                f"You MUST call extract_pdf_text again with "
+                                f"page_range=\"{remaining_start + 1}-{remaining_end}\" "
+                                f"to read the remaining pages. Do NOT skip them — they may "
+                                f"contain critical data (investment rounds, valuations, etc.)."
+                            ),
+                        }
+                    texts.append(page_text)
+                    total_chars += len(page_text)
+                    last_extracted = page_num
 
-        doc.close()
-        return {
-            "file": file_path,
-            "total_pages": total_pages,
-            "extracted_pages": [p + 1 for p in pages_to_extract],
-            "text": "\n\n".join(texts),
-        }
+            return {
+                "file": file_path,
+                "total_pages": total_pages,
+                "extracted_pages": [p + 1 for p in pages_to_extract],
+                "text": "\n\n".join(texts),
+            }
+        finally:
+            doc.close()
     except Exception as e:
         return {"file": file_path, "error": str(e)}
 
@@ -87,42 +88,43 @@ def extract_pdf_tables(file_path: str) -> dict[str, Any]:
     """
     try:
         doc = fitz.open(file_path)
-        total_pages = len(doc)
-        all_tables = []
-        total_chars = 0
+        try:
+            total_pages = len(doc)
+            all_tables = []
+            total_chars = 0
 
-        for page_num in range(total_pages):
-            page = doc[page_num]
-            tabs = page.find_tables()
-            for i, table in enumerate(tabs.tables):
-                rows = table.extract()
-                entry = {
-                    "page": page_num + 1,
-                    "table_index": i,
-                    "rows": rows,
-                }
-                entry_size = len(json.dumps(entry, ensure_ascii=False, default=str))
-                if total_chars + entry_size > _MAX_TEXT_CHARS and all_tables:
-                    doc.close()
-                    return {
-                        "file": file_path,
-                        "total_pages": total_pages,
-                        "tables": all_tables,
-                        "warning": (
-                            f"Table extraction stopped at page {page_num + 1} "
-                            f"due to size limit. {total_pages - page_num} pages "
-                            f"not scanned for tables."
-                        ),
+            for page_num in range(total_pages):
+                page = doc[page_num]
+                tabs = page.find_tables()
+                for i, table in enumerate(tabs.tables):
+                    rows = table.extract()
+                    entry = {
+                        "page": page_num + 1,
+                        "table_index": i,
+                        "rows": rows,
                     }
-                all_tables.append(entry)
-                total_chars += entry_size
+                    entry_size = len(json.dumps(entry, ensure_ascii=False, default=str))
+                    if total_chars + entry_size > _MAX_TEXT_CHARS and all_tables:
+                        return {
+                            "file": file_path,
+                            "total_pages": total_pages,
+                            "tables": all_tables,
+                            "warning": (
+                                f"Table extraction stopped at page {page_num + 1} "
+                                f"due to size limit. {total_pages - page_num} pages "
+                                f"not scanned for tables."
+                            ),
+                        }
+                    all_tables.append(entry)
+                    total_chars += entry_size
 
-        doc.close()
-        return {
-            "file": file_path,
-            "total_pages": total_pages,
-            "tables": all_tables,
-        }
+            return {
+                "file": file_path,
+                "total_pages": total_pages,
+                "tables": all_tables,
+            }
+        finally:
+            doc.close()
     except Exception as e:
         return {"file": file_path, "error": str(e)}
 

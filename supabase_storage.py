@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import logging
 
 _client = None
 
@@ -83,8 +84,8 @@ def read_job(job_id: str) -> dict:
                         "Please submit again."
                     )
             return data
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.warning("read_job failed for job: %s", exc)
     return dict(_JOB_DEFAULTS)
 
 
