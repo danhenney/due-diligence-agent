@@ -31,7 +31,7 @@ def _pick(d: Any, *keys: str) -> dict:
     """Return only the specified keys from a report dict, deep-trimmed."""
     if not isinstance(d, dict):
         return {"data": str(d)[:500]} if d else {}
-    result = {k: d[k] for k in keys if k in d}
+    result = {k: d[k] for k in keys if k in d and d[k] not in (None, "", [], {})}
     # Preserve raw text if no structured keys matched (agent didn't return JSON)
     if not result and "raw" in d:
         return {"raw_analysis": str(d["raw"])[:1500]}
@@ -125,7 +125,7 @@ def _pick_rich(d: Any, *keys: str) -> dict:
     """Like _pick but with generous trim limits for the report writer."""
     if not isinstance(d, dict):
         return {"data": str(d)[:800]} if d else {}
-    result = {k: d[k] for k in keys if k in d}
+    result = {k: d[k] for k in keys if k in d and d[k] not in (None, "", [], {})}
     if not result and "raw" in d:
         return {"raw_analysis": str(d["raw"])[:3000]}
     return _deep_trim(result, max_str=600, max_list=5)
