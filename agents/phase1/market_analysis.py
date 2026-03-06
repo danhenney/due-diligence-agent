@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
-from agents.context import build_doc_instructions
+from agents.context import build_doc_instructions, calc_max_iterations
 from tools.executor import get_tools_for_agent
 
 SYSTEM_PROMPT = """\
@@ -105,7 +105,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         tools=get_tools_for_agent("market_analysis"),
-        max_iterations=15,
+        max_iterations=calc_max_iterations(docs),
         language=state.get("language", "English"),
     )
 

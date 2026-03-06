@@ -283,6 +283,19 @@ def build_doc_instructions(docs: list[str], agent_focus: str = "general") -> str
     )
 
 
+# ── Iteration budget ─────────────────────────────────────────────────────────
+
+def calc_max_iterations(docs: list[str], base: int = 15) -> int:
+    """Calculate max_iterations based on uploaded doc count.
+
+    Each long PDF may need ~4 tool calls (3 text chunks + 1 table extract).
+    We add 4 iterations per doc on top of the base budget so agents always
+    have enough turns for web search and DART after reading all documents.
+    """
+    n_docs = len(docs) if docs else 0
+    return base + (n_docs * 4)
+
+
 # ── Serializer ────────────────────────────────────────────────────────────────
 
 def compact(data: Any) -> str:
