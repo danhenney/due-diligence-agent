@@ -11,8 +11,8 @@ def _get_reader():
     api_key = os.getenv("DART_API_KEY", "")
     if not api_key:
         raise RuntimeError("DART_API_KEY not set — cannot access DART filings.")
-    import OpenDartReader as odr
-    return odr.OpenDartReader(api_key)
+    import OpenDartReader
+    return OpenDartReader(api_key)
 
 
 def dart_finstate(company: str, year: int | None = None, consolidated: bool = True) -> dict[str, Any]:
