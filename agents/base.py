@@ -125,116 +125,75 @@ def run_agent(
     Handles multi-turn tool calls automatically. Returns the final structured
     response parsed from the last assistant text block, or {"raw": text}.
     """
-    # Only inject live-data header and tool-fallback note for agents that
-    # have tools — no-tool agents (red_flag, completeness, final_report,
-    # evaluation calls) don't need these, saving ~180 tokens per call.
+    # Only inject operational rules for agents that have tools.
     if tools:
         today = datetime.now().strftime("%B %d, %Y")
-        live_data_header = (
-            f"TODAY'S DATE: {today}. "
-            "Your training knowledge has a cutoff of August 2025. "
-            "Any numerical figure that can change over time — stock price, market cap, "
-            "revenue, earnings, analyst ratings, interest rates, competitor metrics — "
-            "MUST be fetched via a live tool call. "
-            "Never quote a financial number from training memory; always verify with a tool.\n\n"
-        )
-        system_prompt = live_data_header + system_prompt
+        tool_names = {t.get("name", "") for t in tools}
+        has_web = "web_search" in tool_names
+        has_dart = any(n.startswith("dart_") for n in tool_names)
+        has_sec = "get_sec_filings" in tool_names
+        has_pdf = bool(tool_names & {"extract_pdf_text", "extract_pdf_tables"})
 
-        has_web_search = any(t.get("name") == "web_search" for t in tools)
-        fallback_note = (
-            "\n\nTOOL FALLBACK RULE: If any tool call returns an error or a response "
-            "containing '\"error\"', do NOT stop. "
-            + (
-                "Use web_search or news_search to find the same information instead. "
-                if has_web_search else
-                "Skip that data point, note it as unavailable, and continue your analysis. "
+        # Build a single consolidated injection block
+        rules = [
+            f"TODAY'S DATE: {today}. Training cutoff: August 2025. "
+            "ALL time-sensitive figures (price, revenue, market cap, etc.) MUST come "
+            "from live tool calls — never from training memory.",
+        ]
+
+        # Source hierarchy
+        hierarchy_parts = []
+        if has_dart:
+            hierarchy_parts.append("DART (dart_finstate/dart_company) for Korean companies")
+        if has_sec:
+            hierarchy_parts.append("SEC 10-K/10-Q (get_sec_filings) for US companies")
+        if hierarchy_parts:
+            rules.append(
+                "SOURCE HIERARCHY: " + " / ".join(hierarchy_parts)
+                + " > uploaded documents (exact figures) > yfinance > web search. "
+                "Official filings always win on conflict."
             )
-            + "Always complete your full analysis regardless of individual tool failures."
-        )
-        system_prompt = system_prompt + fallback_note
 
-        budget_note = (
-            "\n\nSEARCH BUDGET: You have a LIMITED number of web searches. "
-            "Be strategic — plan your searches before calling tools. "
-            "Aim for 4-6 total search calls maximum. "
-            "Combine related queries into single broader searches. "
-            "Do NOT search for the same topic twice with slightly different wording."
-        )
-        system_prompt = system_prompt + budget_note
-
-        recency_note = (
-            "\n\nRECENCY REQUIREMENT: Prioritize the MOST RECENT information. "
-            f"Today is {today}. Any claim or fact older than 6 months should be "
-            "verified with a fresh news_search. If you find contradictory info "
-            "between an older source and a newer one, ALWAYS prefer the newer source. "
-            "Stale data is worse than no data — flag anything you cannot confirm as current."
-        )
-        system_prompt = system_prompt + recency_note
-
-        has_dart = any(t.get("name", "").startswith("dart_") for t in tools)
-        has_sec = any(t.get("name") == "get_sec_filings" for t in tools)
-        if has_dart or has_sec:
-            filing_note = (
-                "\n\nOFFICIAL FILINGS PRIORITY (CRITICAL): "
-            )
-            if has_dart:
-                filing_note += (
-                    "For Korean companies, DART (금융감독원 전자공시시스템) filings are the "
-                    "HIGHEST-AUTHORITY source. Call dart_finstate() and dart_company() FIRST "
-                    "before any web search for financial data. "
-                )
-            if has_sec:
-                filing_note += (
-                    "For US companies, SEC 10-K/10-Q filings are the HIGHEST-AUTHORITY source. "
-                    "Call get_sec_filings() for official data. "
-                )
-            filing_note += (
-                "SOURCE HIERARCHY: DART/SEC official filings > uploaded documents > "
-                "yfinance live data > web search. When official filings conflict with "
-                "other sources, the official filing ALWAYS wins."
-            )
-            system_prompt = system_prompt + filing_note
-
-        has_pdf = any(t.get("name") in ("extract_pdf_text", "extract_pdf_tables") for t in tools)
         if has_pdf:
-            doc_priority_note = (
-                "\n\nUPLOADED DOCUMENT PRIORITY (CRITICAL RULE): "
-                "When uploaded documents provide SPECIFIC data (exact figures, names, dates, "
-                "valuations, round details, financial metrics, team bios, etc.), those figures "
-                "are the AUTHORITATIVE source. Do NOT override them with vague web estimates. "
-                "Example: if the uploaded doc says 'Pre-money 255억원, Post-money 300억원', "
-                "use exactly those numbers — do NOT replace with 'estimated $100~150M' from web. "
-                "Web search is for CHALLENGING and CROSS-VERIFYING uploaded data, not replacing it. "
-                "For factual data, also cross-check against OFFICIAL FILINGS (DART for Korean "
-                "companies, SEC 10-K/10-Q for US companies) when available — these are the "
-                "highest-authority public sources. If official filings confirm the uploaded data, "
-                "note it as double-verified. If they contradict, flag the discrepancy and prefer "
-                "the official filing. If no filing is available, the uploaded doc remains primary.\n"
-                "HOWEVER, for SUBJECTIVE analysis (valuations, risk assessments, projections, "
-                "growth estimates, strategic opinions), you MUST form your OWN independent view. "
-                "Do NOT just copy-paste the uploaded doc's opinions or projections as your own. "
-                "Present the uploaded doc's claims, then provide YOUR independent assessment "
-                "based on cross-verified data, and explain where and why you agree or disagree."
+            rules.append(
+                "UPLOADED DOCS: Exact figures from uploaded documents (valuations, rounds, "
+                "financials, team bios) are authoritative — do NOT replace with vague web "
+                "estimates. Use web to cross-verify, not override. "
+                "For SUBJECTIVE analysis (risk, projections, strategic opinions), form your "
+                "OWN independent view — do not copy-paste the document's opinions."
             )
-            system_prompt = system_prompt + doc_priority_note
+
+        if has_web:
+            rules.append(
+                "SEARCH BUDGET: 4-6 searches max. Plan before calling. "
+                "Don't repeat queries with slightly different wording."
+            )
+
+        rules.append(
+            f"RECENCY: Prefer newest sources. Anything >6 months old should be re-verified. "
+            f"Newer source always wins over older on conflict."
+        )
+        rules.append(
+            "TOOL ERRORS: If a tool returns an error, "
+            + ("fall back to web_search. " if has_web else "skip that data point. ")
+            + "Always complete your full analysis."
+        )
+        rules.append(
+            "QUALITY: Cite sources for all data. Cross-verify key claims with 2+ sources. "
+            "Use actual numbers, not vague summaries. Deliver investor-focused analysis."
+        )
+
+        system_prompt = "\n".join(rules) + "\n\n" + system_prompt
 
     if language.lower() != "english":
-        system_prompt = (
-            system_prompt
-            + f"\n\nIMPORTANT: Write your ENTIRE response in {language}, "
-            + "including all analysis text and JSON field values. Do not use English."
+        system_prompt += (
+            f"\n\nWrite your ENTIRE response in {language}, including JSON field values."
         )
-        if tools and has_web_search:
-            local_search_note = (
-                f"\n\nLOCAL-LANGUAGE SEARCH: For companies based in non-English-speaking "
-                f"countries, you MUST also search in the LOCAL LANGUAGE (e.g., Korean for "
-                f"Korean companies, Japanese for Japanese companies). Local news outlets "
-                f"report breaking developments DAYS before English media picks them up. "
-                f"Use at least 1-2 of your search calls with queries in the local language "
-                f"(e.g., '네이버 국가 AI 프로젝트 2025' instead of 'Naver sovereign AI project'). "
-                f"Local-language results are MORE RELIABLE for local market developments."
+        if tools and has_web:
+            system_prompt += (
+                f"\nAlso search in the LOCAL LANGUAGE (e.g., Korean for Korean companies). "
+                f"Local news breaks stories days before English media."
             )
-            system_prompt = system_prompt + local_search_note
 
     client = _get_client()
     messages: list[dict] = [{"role": "user", "content": user_message}]

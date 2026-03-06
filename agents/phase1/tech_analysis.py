@@ -23,13 +23,6 @@ Focus on:
    new model releases, and product updates. These are critical for valuation.
 8. R&D investment levels — % of revenue, team size, hiring trends
 
-QUALITY CRITERIA:
-- All data must cite explicit sources. Cross-verify with 3+ sources.
-- All figures must come from live tool calls, not training memory.
-- Provide full data explanations with actual numbers, not 1-2 line summaries.
-- Deliver investor-focused analysis — translate technical details into business impact.
-- Use investor-friendly language, not engineering jargon.
-
 Return a JSON object with this exact structure:
 {
   "summary": "<2-3 sentence executive summary>",

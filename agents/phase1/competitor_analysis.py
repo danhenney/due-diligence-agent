@@ -23,13 +23,6 @@ Focus on:
 7. Market share trends (gaining or losing share?)
 8. Pricing power analysis
 
-QUALITY CRITERIA:
-- All data must cite explicit sources. Cross-verify with 3+ sources.
-- All figures must come from live tool calls, not training memory.
-- Provide full data explanations with actual numbers, not 1-2 line summaries.
-- Deliver investor-focused analysis and opinions, not just facts.
-- Include actual revenue/market cap figures for public competitors.
-
 Return a JSON object with this exact structure:
 {
   "summary": "<2-3 sentence executive summary>",

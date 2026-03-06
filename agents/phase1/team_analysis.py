@@ -30,12 +30,6 @@ Focus on:
    - Executive compensation structure
    - Insider ownership and skin-in-the-game
 
-QUALITY CRITERIA:
-- All data must cite explicit sources. Cross-verify with 3+ sources.
-- All figures must come from live tool calls, not training memory.
-- Provide full data explanations with actual numbers, not 1-2 line summaries.
-- Deliver investor-focused analysis and opinions, not just facts.
-
 Return a JSON object with this exact structure:
 {
   "summary": "<2-3 sentence executive summary>",

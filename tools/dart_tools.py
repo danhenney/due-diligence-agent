@@ -15,12 +15,13 @@ def _get_reader():
     return odr.OpenDartReader(api_key)
 
 
-def dart_finstate(company: str, year: int | None = None) -> dict[str, Any]:
+def dart_finstate(company: str, year: int | None = None, consolidated: bool = True) -> dict[str, Any]:
     """Retrieve financial statements for a Korean company from DART.
 
     Args:
         company: Company name (e.g. '업스테이지') or stock code (e.g. '462870').
         year: Fiscal year. Defaults to the most recent available year.
+        consolidated: If True, try consolidated (연결) statements first, then standalone.
     """
     try:
         dart = _get_reader()
@@ -28,7 +29,17 @@ def dart_finstate(company: str, year: int | None = None) -> dict[str, Any]:
         if year is None:
             year = datetime.now().year - 1  # most recent full fiscal year
 
-        df = dart.finstate(company, year)
+        # Try consolidated (연결) first, then standalone (별도)
+        df = None
+        basis = "consolidated"
+        if consolidated:
+            try:
+                df = dart.finstate(company, year, reprt_code='11011')  # annual consolidated
+            except Exception:
+                pass
+        if df is None or (hasattr(df, "empty") and df.empty):
+            df = dart.finstate(company, year)
+            basis = "standalone"
         if df is None or (hasattr(df, "empty") and df.empty):
             # Try previous year as fallback
             df = dart.finstate(company, year - 1)
@@ -49,6 +60,7 @@ def dart_finstate(company: str, year: int | None = None) -> dict[str, Any]:
         return {
             "company": company,
             "year": year,
+            "basis": basis,  # "consolidated" or "standalone"
             "source": "DART (금융감독원 전자공시시스템)",
             "statement_count": len(slim),
             "statements": slim[:50],  # cap to avoid huge payloads
@@ -129,8 +141,8 @@ DART_FINSTATE_TOOL = {
     "description": (
         "Retrieve official financial statements (income statement, balance sheet, "
         "cash flow) for a Korean company from DART (금융감독원 전자공시시스템). "
-        "This is the HIGHEST-AUTHORITY source for Korean company financials. "
-        "Use company name in Korean (e.g. '업스테이지') or stock code."
+        "Returns consolidated (연결) statements by default, falls back to standalone. "
+        "This is the HIGHEST-AUTHORITY source for Korean company financials."
     ),
     "input_schema": {
         "type": "object",

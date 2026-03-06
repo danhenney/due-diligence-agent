@@ -102,23 +102,13 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     is_public = state.get("is_public", True)
     if is_public is False:
         verification_instructions = (
-            "This is a PRIVATE company. Do NOT call yf_get_info or yf_get_financials.\n"
-            "VERIFICATION PRIORITY:\n"
-            "1. DART (HIGHEST): Call dart_finstate() to cross-check financial figures against "
-            "official Korean FSS filings. DART data is the gold standard.\n"
-            "2. Web/news search for other claims.\n"
-            "Private company data may have wider uncertainty — flag this but do not "
-            "treat it as contradicted unless DART contradicts it.\n"
+            "PRIVATE company — do NOT call yf_get_info/yf_get_financials.\n"
+            "Verify via: dart_finstate() for financials, web/news for other claims.\n"
         )
     else:
         verification_instructions = (
-            "LIVE VERIFICATION REQUIREMENT:\n"
-            "1. OFFICIAL FILINGS (HIGHEST): For Korean companies, call dart_finstate() "
-            "to verify financials against DART. For US companies, use SEC filings.\n"
-            "2. MARKET DATA: Call yf_get_info(ticker) or yf_get_financials(ticker) "
-            "to confirm market cap, stock price, valuation multiples.\n"
-            "3. NEWS: Use news_search to verify recent events.\n"
-            "If DART/SEC data conflicts with other sources, DART/SEC wins.\n"
+            "Verify via: dart_finstate() for Korean financials, yf_get_info(ticker) "
+            "for market data, news_search for recent events.\n"
         )
 
     user_message = (

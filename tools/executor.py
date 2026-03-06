@@ -26,13 +26,6 @@ def _cache_key(tool_name: str, tool_input: dict) -> tuple:
     frozen = _json.dumps(tool_input, sort_keys=True, default=str)
     return (tool_name, frozen)
 
-# Map tool name → executor module
-_TOOL_REGISTRY: dict[str, object] = {}
-
-for _mod in (tavily_tools, edgar_tools, dart_tools, pdf_tools, yfinance_tools,
-             pytrends_tools, fred_tools, github_tools, patents_tools):
-    _TOOL_REGISTRY[_mod.__name__.split(".")[-1]] = _mod
-
 
 def get_all_tools() -> list[dict]:
     """Return all Anthropic tool definitions."""
@@ -147,36 +140,36 @@ def execute_tool_call(tool_name: str, tool_input: dict) -> str:
     return result
 
 
+_TOOL_DISPATCH: dict[str, object] = {
+    "web_search":              tavily_tools,
+    "news_search":             tavily_tools,
+    "get_sec_filings":         edgar_tools,
+    "get_company_facts":       edgar_tools,
+    "dart_finstate":           dart_tools,
+    "dart_company":            dart_tools,
+    "dart_list":               dart_tools,
+    "extract_pdf_text":        pdf_tools,
+    "extract_pdf_tables":      pdf_tools,
+    "yf_get_info":             yfinance_tools,
+    "yf_get_financials":       yfinance_tools,
+    "yf_get_analyst_data":     yfinance_tools,
+    "google_trends_interest":  pytrends_tools,
+    "google_trends_related":   pytrends_tools,
+    "fred_get_series":         fred_tools,
+    "fred_search_series":      fred_tools,
+    "github_search_repos":     github_tools,
+    "github_repo_stats":       github_tools,
+    "search_patents":          patents_tools,
+    "get_patent_detail":       patents_tools,
+}
+
+
 def _dispatch_tool(tool_name: str, tool_input: dict) -> str:
     """Route a tool call to the correct executor module."""
-    # Tavily tools
-    if tool_name in ("web_search", "news_search"):
-        return tavily_tools.execute_tool(tool_name, tool_input)
-    # EDGAR tools
-    if tool_name in ("get_sec_filings", "get_company_facts"):
-        return edgar_tools.execute_tool(tool_name, tool_input)
-    # DART tools (Korean FSS)
-    if tool_name in ("dart_finstate", "dart_company", "dart_list"):
-        return dart_tools.execute_tool(tool_name, tool_input)
-    # PDF tools
-    if tool_name in ("extract_pdf_text", "extract_pdf_tables"):
-        return pdf_tools.execute_tool(tool_name, tool_input)
-    # yfinance tools
-    if tool_name in ("yf_get_info", "yf_get_financials", "yf_get_analyst_data"):
-        return yfinance_tools.execute_tool(tool_name, tool_input)
-    # Google Trends tools
-    if tool_name in ("google_trends_interest", "google_trends_related"):
-        return pytrends_tools.execute_tool(tool_name, tool_input)
-    # FRED macroeconomic tools
-    if tool_name in ("fred_get_series", "fred_search_series"):
-        return fred_tools.execute_tool(tool_name, tool_input)
-    # GitHub tools
-    if tool_name in ("github_search_repos", "github_repo_stats"):
-        return github_tools.execute_tool(tool_name, tool_input)
-    # Patent tools
-    if tool_name in ("search_patents", "get_patent_detail"):
-        return patents_tools.execute_tool(tool_name, tool_input)
-    return _tool_error(tool_name, f"Unknown tool '{tool_name}'", "web_search")
+    module = _TOOL_DISPATCH.get(tool_name)
+    if module is None:
+        return _tool_error(tool_name, f"Unknown tool '{tool_name}'", "web_search")
+    return module.execute_tool(tool_name, tool_input)
 
 
 def _fallback_for(tool_name: str) -> str:

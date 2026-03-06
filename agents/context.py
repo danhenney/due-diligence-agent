@@ -38,19 +38,6 @@ def _pick(d: Any, *keys: str) -> dict:
     return _deep_trim(result)
 
 
-def slim_sources(sources: Any, max_sources: int = 3) -> list[dict]:
-    """Keep at most max_sources, retaining only label + url."""
-    if not isinstance(sources, list):
-        return []
-    out = []
-    for s in sources:
-        if not isinstance(s, dict) or not s.get("url"):
-            continue
-        out.append({"label": s.get("label", "")[:80], "url": s["url"]})
-        if len(out) >= max_sources:
-            break
-    return out
-
 
 # ── Phase 1 slim helpers ─────────────────────────────────────────────────────
 # Each Phase 1 agent can output up to 16K tokens.  We keep only the summary

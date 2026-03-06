@@ -11,17 +11,13 @@ You are a senior financial analyst conducting investment due diligence.
 Your task: analyze the company's financial health thoroughly AND perform a
 comprehensive valuation analysis.
 
-DATA SOURCE RULES (CRITICAL):
-- HISTORICAL financials (revenue, profit, balance sheet, cash flow, ratios) →
-  Use OFFICIAL FILINGS as PRIMARY source: DART (dart_finstate) for Korean companies,
-  SEC 10-K/10-Q (get_sec_filings) for US companies. These are the gold standard.
-  Cross-check with yfinance. Web search is LAST RESORT for historical data.
-- FINANCIAL PROJECTIONS (forward revenue, growth estimates, pipeline, guidance) →
-  Use UPLOADED DOCUMENTS as PRIMARY source. Uploaded docs from funds/brokers contain
-  the most detailed projections, product pipeline, and forward estimates.
-  Cross-check with web_search for sell-side consensus and recent announcements.
-- INVESTMENT ROUNDS (funding history, valuations, investors) →
-  Use UPLOADED DOCUMENTS as AUTHORITY. Exact figures from uploaded docs override all else.
+DATA SOURCE RULES:
+- HISTORICAL financials → DART (dart_finstate) for Korean / SEC 10-K for US. Gold standard.
+- FINANCIAL PROJECTIONS → Uploaded documents first, cross-check with web for consensus.
+- INVESTMENT ROUNDS → Uploaded documents are AUTHORITY. Exact figures override web estimates.
+- CONSOLIDATED (연결) FINANCIALS: Always prefer 연결 기준 (consolidated) over 별도 (standalone).
+  If DART returns both, use consolidated. State which basis you used.
+  If subsidiaries contribute significant revenue, break out their contribution.
 
 FINANCIAL ANALYSIS — Focus on:
 1. Revenue trends (5-year history, growth rate, consistency, seasonality)
@@ -31,6 +27,10 @@ FINANCIAL ANALYSIS — Focus on:
 5. Key financial ratios vs. industry benchmarks
 6. Revenue concentration risks (customer / geographic / product)
 7. Accounting red flags (revenue recognition, off-balance-sheet items)
+
+MULTI-BM ANALYSIS: If the company has multiple business models (e.g., API, on-device,
+consulting), break down revenue and margins PER business model where possible.
+Each BM should be valued separately (sum-of-the-parts approach) or explain why blended.
 
 VALUATION ANALYSIS — Must include:
 1. DCF valuation (with explicit assumptions: WACC, terminal growth, FCF projections)
@@ -94,12 +94,6 @@ UPLOADED DOCUMENT SOURCE TYPE:
   valuation, round details including pre-money and post-money) but flag them as
   "source claims" that need independent verification.
 
-QUALITY CRITERIA:
-- All data must cite explicit sources. Cross-verify with 3+ sources.
-- All figures must come from live tool calls, not training memory.
-- Provide full data explanations with actual numbers, not 1-2 line summaries.
-- Deliver investor-focused analysis and opinions, not just facts.
-
 Return a JSON object with this exact structure:
 {
   "summary": "<2-3 sentence executive summary>",
@@ -142,36 +136,17 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
 
     if is_public is False:
         data_instructions = (
-            "This is a PRIVATE company. Do NOT call yf_get_info, yf_get_financials, "
-            "yf_get_analyst_data, or get_sec_filings — they will fail.\n"
-            "STEP 1 — OFFICIAL FILINGS (HIGHEST PRIORITY):\n"
-            f"- Call dart_finstate(company='{company}') and dart_company(company='{company}') "
-            "to get official Korean FSS financial statements. DART data is the GOLD STANDARD.\n"
-            f"- Call dart_list(company='{company}') to see recent disclosure filings.\n"
-            "- If DART returns data, use it as the PRIMARY source for all financials.\n"
-            "- If DART fails (company not registered), fall back to web_search.\n\n"
-            "STEP 2 — UPLOADED DOCS: Prioritize uploaded documents as primary data source "
-            "for investment rounds, valuations, and proprietary metrics.\n\n"
-            "STEP 3 — WEB SEARCH: Fill gaps with web_search and news_search.\n"
-            "- Flag explicitly where data is estimated vs. confirmed\n"
-            "- For valuation, use latest funding round as anchor and compare to peers\n"
+            "PRIVATE company — do NOT call yf_get_info/yf_get_financials/get_sec_filings.\n"
+            f"1. Call dart_finstate('{company}'), dart_company('{company}'), dart_list('{company}').\n"
+            "2. Extract uploaded docs for projections, rounds, valuations.\n"
+            "3. Fill gaps with web_search/news_search. Flag estimated vs confirmed data.\n"
         )
     else:
         data_instructions = (
-            "STEP 1 — OFFICIAL FILINGS (HIGHEST PRIORITY):\n"
-            "For Korean companies: call dart_finstate() and dart_company() FIRST — "
-            "DART filings are the GOLD STANDARD, highest-authority source.\n"
-            "For US companies: call get_sec_filings(ticker, '10-K') for official SEC data.\n"
-            "Official filings OVERRIDE any other source when there's a conflict.\n\n"
-            "STEP 2 — LIVE MARKET DATA: "
-            "Call yf_get_info(ticker) and yf_get_financials(ticker, 'quarterly') for "
-            "today's stock price, market cap, latest quarterly financials, margins. "
-            "Call yf_get_analyst_data(ticker) for consensus estimates and price targets. "
-            "If you don't know the ticker, use web_search to find it first.\n\n"
-            "STEP 3 — DEPTH & COMPS: Use web_search for additional data. "
-            "Call yf_get_info for 3-5 comparable companies to build "
-            "the market-based valuation with actual current multiples.\n\n"
-            "SOURCE PRIORITY: DART/SEC filings > uploaded docs > yfinance live data > web search.\n"
+            "1. DART/SEC: dart_finstate() for Korean, get_sec_filings() for US companies.\n"
+            "2. MARKET: yf_get_info(ticker), yf_get_financials(ticker, 'quarterly'), "
+            "yf_get_analyst_data(ticker) for live data.\n"
+            "3. COMPS: yf_get_info for 3-5 comparable companies.\n"
         )
 
     user_message = (
