@@ -183,8 +183,18 @@ def rich_ra_synthesis(r: Any) -> dict:
                       "attractiveness_scorecard", "confidence_score")
 
 def rich_risk_assessment(r: Any) -> dict:
-    return _pick_rich(r, "summary", "top_risks", "overall_risk_level",
-                      "confidence_score")
+    d = _pick_rich(r, "summary", "risk_matrix", "top_risks",
+                      "mitigation_strategies", "overall_risk_level",
+                      "risk_adjusted_assessment", "confidence_score")
+    # Risk matrix and top_risks are critical — use higher limits
+    if isinstance(r, dict):
+        if "risk_matrix" in r and r["risk_matrix"]:
+            d["risk_matrix"] = _deep_trim(r["risk_matrix"], max_str=600, max_list=15)
+        if "top_risks" in r and r["top_risks"]:
+            d["top_risks"] = _deep_trim(r["top_risks"], max_str=600, max_list=10)
+        if "mitigation_strategies" in r and r["mitigation_strategies"]:
+            d["mitigation_strategies"] = _deep_trim(r["mitigation_strategies"], max_str=600, max_list=10)
+    return d
 
 def rich_strategic_insight(r: Any) -> dict:
     d = _pick_rich(r, "summary", "recommendation", "rationale",
@@ -206,7 +216,20 @@ def rich_critique(r: Any) -> dict:
     return d
 
 def rich_dd_questions(r: Any) -> dict:
-    return _pick_rich(r, "unresolved_issues", "dd_questionnaire", "summary")
+    d = {}
+    if not isinstance(r, dict):
+        return {"data": str(r)[:800]} if r else {}
+    if "unresolved_issues" in r and r["unresolved_issues"]:
+        d["unresolved_issues"] = _deep_trim(r["unresolved_issues"], max_str=800, max_list=20)
+    if "dd_questionnaire" in r and r["dd_questionnaire"]:
+        d["dd_questionnaire"] = _deep_trim(r["dd_questionnaire"], max_str=800, max_list=20)
+    if "summary" in r and r["summary"]:
+        d["summary"] = r["summary"][:1200] if isinstance(r["summary"], str) else r["summary"]
+    if "next_steps" in r and r["next_steps"]:
+        d["next_steps"] = _deep_trim(r["next_steps"], max_str=600, max_list=10)
+    if not d and "raw" in r:
+        return {"raw_analysis": str(r["raw"])[:3000]}
+    return d
 
 
 # ── Uploaded document instruction builder ─────────────────────────────────────
