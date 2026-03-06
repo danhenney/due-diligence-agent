@@ -83,26 +83,44 @@ def extract_pdf_tables(file_path: str) -> dict[str, Any]:
 
     Returns:
         Dict with keys: file, total_pages, tables (list of table dicts).
+        Capped at ~18K chars total to avoid blowing up tool results.
     """
     try:
         doc = fitz.open(file_path)
+        total_pages = len(doc)
         all_tables = []
+        total_chars = 0
 
-        for page_num in range(len(doc)):
+        for page_num in range(total_pages):
             page = doc[page_num]
             tabs = page.find_tables()
             for i, table in enumerate(tabs.tables):
                 rows = table.extract()
-                all_tables.append({
+                entry = {
                     "page": page_num + 1,
                     "table_index": i,
                     "rows": rows,
-                })
+                }
+                entry_size = len(json.dumps(entry, ensure_ascii=False, default=str))
+                if total_chars + entry_size > _MAX_TEXT_CHARS and all_tables:
+                    doc.close()
+                    return {
+                        "file": file_path,
+                        "total_pages": total_pages,
+                        "tables": all_tables,
+                        "warning": (
+                            f"Table extraction stopped at page {page_num + 1} "
+                            f"due to size limit. {total_pages - page_num} pages "
+                            f"not scanned for tables."
+                        ),
+                    }
+                all_tables.append(entry)
+                total_chars += entry_size
 
         doc.close()
         return {
             "file": file_path,
-            "total_pages": len(doc) if not doc.is_closed else "?",
+            "total_pages": total_pages,
             "tables": all_tables,
         }
     except Exception as e:
