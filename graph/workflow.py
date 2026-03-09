@@ -45,11 +45,33 @@ from agents.context import (
     slim_market_analysis, slim_competitor, slim_financial_analysis,
     slim_tech, slim_legal_regulatory, slim_team, compact,
 )
+from config import ANTHROPIC_API_KEY, MODEL_NAME
 
 log = logging.getLogger(__name__)
 
 
 _AGENT_TIMEOUT_SEC = 600  # 10-minute timeout per agent
+
+# ── Disk-based output persistence ────────────────────────────────────────────
+import json as _json
+import os as _os
+import re as _re
+
+def _save_agent_output(company_name: str, agent_name: str, result: dict) -> None:
+    """Persist agent result to outputs/<company_slug>/<agent_name>.json.
+
+    Side-effect only — failures are logged but never raised.
+    """
+    try:
+        slug = _re.sub(r"[^\w\-]", "_", company_name.strip())[:60]
+        out_dir = _os.path.join("outputs", slug)
+        _os.makedirs(out_dir, exist_ok=True)
+        path = _os.path.join(out_dir, f"{agent_name}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(result, f, ensure_ascii=False, indent=2)
+        log.info("[disk] Saved %s → %s", agent_name, path)
+    except Exception as exc:
+        log.warning("[disk] Failed to save %s: %s", agent_name, exc)
 
 
 def _run_agent_with_usage(fn, state: Any) -> tuple[dict, dict]:
@@ -61,6 +83,11 @@ def _run_agent_with_usage(fn, state: Any) -> tuple[dict, dict]:
         get_and_reset_usage()
         raise
     usage = get_and_reset_usage()
+    # Persist to disk for crash resilience and human review
+    company = state.get("company_name", "unknown") if isinstance(state, dict) else "unknown"
+    for key, value in result.items():
+        if isinstance(value, dict):
+            _save_agent_output(company, key, value)
     return result, usage
 
 
@@ -167,7 +194,7 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
 
 
 def phase1_aggregator(state: DueDiligenceState) -> dict:
-    """Build compact Phase 1 context for downstream agents."""
+    """Build compact Phase 1 context + extract settled claims and tensions."""
     phase1_context = compact({
         "market":      slim_market_analysis(state.get("market_analysis")),
         "competitors": slim_competitor(state.get("competitor_analysis")),
@@ -176,7 +203,55 @@ def phase1_aggregator(state: DueDiligenceState) -> dict:
         "legal":       slim_legal_regulatory(state.get("legal_regulatory")),
         "team":        slim_team(state.get("team_analysis")),
     })
-    return {"current_phase": "phase2", "phase1_context": phase1_context}
+
+    # Smart Aggregator: extract cross-pollination signals via one LLM call
+    settled_claims = []
+    phase1_tensions = []
+    phase1_gaps = []
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        lang = state.get("language", "English")
+        resp = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"You are analyzing 6 due diligence research agents' outputs for {state.get('company_name', 'a company')}.\n"
+                    f"Respond in {lang}. Output ONLY valid JSON with exactly 3 keys.\n\n"
+                    f"Phase 1 agent results:\n{phase1_context[:8000]}\n\n"
+                    "Extract:\n"
+                    "1. \"settled_claims\": list of 5-8 key FACTS that multiple agents agree on. "
+                    "Include specific numbers. These will NOT be repeated in Phase 2.\n"
+                    "2. \"tensions\": list of 3-5 CONTRADICTIONS or disagreements between agents. "
+                    "Example: 'market_analysis estimates TAM at $14B but competitor_analysis says $25.7B'\n"
+                    "3. \"gaps\": list of 2-3 important questions that NO agent answered.\n\n"
+                    "JSON only, no markdown fences:"
+                ),
+            }],
+        )
+        import json
+        text = resp.content[0].text.strip()
+        # Handle potential markdown fences
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(text)
+        settled_claims = parsed.get("settled_claims", [])[:8]
+        phase1_tensions = parsed.get("tensions", [])[:5]
+        phase1_gaps = parsed.get("gaps", [])[:3]
+        log.info("[aggregator] Extracted %d claims, %d tensions, %d gaps",
+                 len(settled_claims), len(phase1_tensions), len(phase1_gaps))
+    except Exception as exc:
+        log.warning("[aggregator] Smart extraction failed, proceeding without: %s", exc)
+
+    return {
+        "current_phase": "phase2",
+        "phase1_context": phase1_context,
+        "settled_claims": settled_claims,
+        "phase1_tensions": phase1_tensions,
+        "phase1_gaps": phase1_gaps,
+    }
 
 
 def phase2_parallel(state: DueDiligenceState) -> dict:

@@ -85,11 +85,11 @@ def slim_ra_synthesis(r: Any) -> dict:
 
 def slim_risk_assessment(r: Any) -> dict:
     d = _pick(r, "summary", "top_risks", "overall_risk_level",
-              "confidence_score")
+              "unresolved_objections", "confidence_score")
     return d
 
 def slim_strategic_insight(r: Any) -> dict:
-    d = _pick(r, "summary", "recommendation", "rationale",
+    d = _pick(r, "summary", "framings", "recommendation", "rationale",
               "key_conditions", "confidence_score")
     if isinstance(d.get("rationale"), str) and len(d["rationale"]) > 600:
         d["rationale"] = d["rationale"][:600] + "…"
@@ -185,7 +185,8 @@ def rich_ra_synthesis(r: Any) -> dict:
 def rich_risk_assessment(r: Any) -> dict:
     d = _pick_rich(r, "summary", "risk_matrix", "top_risks",
                       "mitigation_strategies", "overall_risk_level",
-                      "risk_adjusted_assessment", "confidence_score")
+                      "risk_adjusted_assessment", "unresolved_objections",
+                      "confidence_score")
     # Risk matrix and top_risks are critical — use higher limits
     if isinstance(r, dict):
         if "risk_matrix" in r and r["risk_matrix"]:
@@ -197,7 +198,7 @@ def rich_risk_assessment(r: Any) -> dict:
     return d
 
 def rich_strategic_insight(r: Any) -> dict:
-    d = _pick_rich(r, "summary", "recommendation", "rationale",
+    d = _pick_rich(r, "summary", "framings", "recommendation", "rationale",
                    "key_conditions", "confidence_score")
     if isinstance(d.get("rationale"), str) and len(d["rationale"]) > 1000:
         d["rationale"] = d["rationale"][:1000] + "…"

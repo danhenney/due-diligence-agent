@@ -36,6 +36,11 @@ class DueDiligenceState(TypedDict):
     final_report: str | None
     recommendation: str | None        # INVEST / WATCH / PASS
 
+    # ── Cross-pollination (Smart Aggregator output) ───────────────────────
+    settled_claims: list[str] | None  # facts all Phase 1 agents agree on
+    phase1_tensions: list[str] | None # contradictions between Phase 1 agents
+    phase1_gaps: list[str] | None     # important questions no agent answered
+
     # ── Feedback loop ─────────────────────────────────────────────────────
     phase1_context: str | None        # compact Phase 1 summary, built once
     feedback_loop_count: int          # starts 0, max 2

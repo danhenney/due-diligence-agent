@@ -15,10 +15,14 @@ You are a senior investment strategist rendering a preliminary investment decisi
 You have access to all Phase 1 research AND the R&A Synthesis and Risk Assessment.
 
 Your task:
-1. Render a clear INVEST / WATCH / PASS recommendation with detailed rationale
-2. Provide synergy analysis — how does this investment fit a portfolio?
-3. Identify key conditions that would change the recommendation
-4. Outline the investment timeline and exit strategy considerations
+1. Develop 2-3 DISTINCT FRAMINGS (scenarios) for this investment — different ways to
+   interpret the same data. Example: "Growth play into enterprise AI" vs "Distressed asset
+   with turnaround potential" vs "Regulatory arbitrage bet". Pick the STRONGEST framing
+   and base your recommendation on it, but name the runners-up.
+2. Render a clear INVEST / WATCH / PASS recommendation with detailed rationale
+3. Provide synergy analysis — how does this investment fit a portfolio?
+4. Identify key conditions that would change the recommendation
+5. Outline the investment timeline and exit strategy considerations
 
 RECOMMENDATION THRESHOLDS — be decisive, not conservative:
 - INVEST: Compelling evidence of value creation, manageable risks, positive trend,
@@ -39,8 +43,11 @@ QUALITY CRITERIA:
 Return a JSON object with this exact structure:
 {
   "summary": "<2-3 sentence executive summary>",
+  "framings": [
+    {"name": "...", "thesis": "...", "strength": "strongest|runner-up"}
+  ],
   "recommendation": "INVEST|WATCH|PASS",
-  "rationale": "<2-3 paragraph detailed rationale>",
+  "rationale": "<2-3 paragraph detailed rationale based on strongest framing>",
   "key_arguments_for": ["..."],
   "key_arguments_against": ["..."],
   "synergy_analysis": {
@@ -82,11 +89,24 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
             "Use web_search for any additional data needed.\n\n"
         )
 
+    # Build cross-pollination context from Smart Aggregator
+    claims = state.get("settled_claims") or []
+    tensions = state.get("phase1_tensions") or []
+    gaps = state.get("phase1_gaps") or []
+    cross_poll = ""
+    if claims:
+        cross_poll += "\n=== SETTLED CLAIMS (assume these are true) ===\n" + "\n".join(f"- {c}" for c in claims)
+    if tensions:
+        cross_poll += "\n\n=== UNRESOLVED TENSIONS (your recommendation must address these) ===\n" + "\n".join(f"- {t}" for t in tensions)
+    if gaps:
+        cross_poll += "\n\n=== DATA GAPS (factor into confidence level) ===\n" + "\n".join(f"- {g}" for g in gaps)
+
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"{private_note}"
         f"Phase 1 Research:\n{phase1_context}\n\n"
         f"Phase 2 Synthesis & Risk:\n{phase2_context}\n\n"
+        + (f"{cross_poll}\n\n" if cross_poll else "") +
         "Render your investment recommendation (INVEST/WATCH/PASS) with detailed "
         "rationale and synergy analysis.\n\n"
         "SOURCE TRACKING: Include sources from prior data and any new tool calls.\n\n"

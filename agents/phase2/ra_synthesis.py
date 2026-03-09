@@ -67,9 +67,22 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         "team": slim_team(state.get("team_analysis")),
     })
 
+    # Build cross-pollination context from Smart Aggregator
+    claims = state.get("settled_claims") or []
+    tensions = state.get("phase1_tensions") or []
+    gaps = state.get("phase1_gaps") or []
+    cross_poll = ""
+    if claims:
+        cross_poll += "\n=== SETTLED CLAIMS (do NOT restate — build on these) ===\n" + "\n".join(f"- {c}" for c in claims)
+    if tensions:
+        cross_poll += "\n\n=== TENSIONS (resolve or explain these contradictions) ===\n" + "\n".join(f"- {t}" for t in tensions)
+    if gaps:
+        cross_poll += "\n\n=== GAPS (fill these if possible with tool calls) ===\n" + "\n".join(f"- {g}" for g in gaps)
+
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Phase 1 Research Reports:\n{phase1_context}\n\n"
+        + (f"{cross_poll}\n\n" if cross_poll else "") +
         "Synthesize all Phase 1 findings into core investment arguments and "
         "build the CDD/LDD/FDD attractiveness scorecard.\n\n"
         "SOURCE TRACKING: Include sources from Phase 1 data and any new tool calls.\n\n"

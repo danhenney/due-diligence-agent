@@ -179,8 +179,14 @@ def run_agent(
             + "Always complete your full analysis."
         )
         rules.append(
-            "QUALITY: Cite sources for all data. Cross-verify key claims with 2+ sources. "
+            "QUALITY: Cite sources for all data. Cross-verify key claims with 3+ sources. "
             "Use actual numbers, not vague summaries. Deliver investor-focused analysis."
+        )
+        rules.append(
+            "[DATA]/[INFERENCE] LABELING: Prefix every major statement with "
+            "[DATA] (directly from a source — tool result, document, filing) or "
+            "[INFERENCE] (your own analysis/interpretation). "
+            "This helps downstream agents distinguish verified facts from speculation."
         )
 
         system_prompt = "\n".join(rules) + "\n\n" + system_prompt

@@ -28,6 +28,12 @@ For EACH risk:
 - Calculate severity = probability × impact
 - Propose specific mitigation strategies
 
+UNRESOLVED OBJECTIONS (critical):
+After completing the risk matrix, identify 2-3 of the HARDEST challenges to this investment
+that you CANNOT fully rebut. These are "kill criteria" — objections that stand WITHOUT a
+satisfying counter-argument. Do NOT provide rebuttals. Leave them standing as open questions.
+Rate each by kill_potential: how likely this objection alone could sink the deal.
+
 RISK CALIBRATION — do NOT over-flag:
 - Minor document discrepancies (fund size committed vs called, rounding, currency
   conversion, different reporting dates) are NOT risks. Only flag genuinely material issues.
@@ -63,6 +69,9 @@ Return a JSON object with this exact structure:
   ],
   "overall_risk_level": "high|medium|low",
   "risk_adjusted_assessment": "...",
+  "unresolved_objections": [
+    {"objection": "...", "why_hard": "...", "kill_potential": "high|medium|low"}
+  ],
   "confidence_score": 0.0,
   "sources": [{"label": "...", "url": "...", "tool": "..."}]
 }
@@ -79,9 +88,22 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
         "team": slim_team(state.get("team_analysis")),
     })
 
+    # Build cross-pollination context from Smart Aggregator
+    claims = state.get("settled_claims") or []
+    tensions = state.get("phase1_tensions") or []
+    gaps = state.get("phase1_gaps") or []
+    cross_poll = ""
+    if claims:
+        cross_poll += "\n=== SETTLED CLAIMS (these are established — focus on RISKS to these claims) ===\n" + "\n".join(f"- {c}" for c in claims)
+    if tensions:
+        cross_poll += "\n\n=== TENSIONS (these contradictions are risk signals — investigate) ===\n" + "\n".join(f"- {t}" for t in tensions)
+    if gaps:
+        cross_poll += "\n\n=== GAPS (missing data = risk — flag these) ===\n" + "\n".join(f"- {g}" for g in gaps)
+
     user_message = (
         f"Company: {state['company_name']}\n\n"
         f"Phase 1 Research Reports:\n{phase1_context}\n\n"
+        + (f"{cross_poll}\n\n" if cross_poll else "") +
         "Conduct a comprehensive risk assessment covering all risk categories. "
         "Build a detailed risk matrix with probability, impact, and severity scores.\n\n"
         "SOURCE TRACKING: Include sources from Phase 1 data and any new tool calls.\n\n"

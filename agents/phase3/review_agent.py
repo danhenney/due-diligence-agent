@@ -52,6 +52,13 @@ DO NOT OVER-FLAG minor discrepancies between uploaded documents:
 - Reserve "CONTRADICTED" and red flags for genuinely material issues that affect
   the investment thesis — not for routine document inconsistencies.
 
+REALITY CHECK (MANDATORY):
+If the overall narrative is heavily bullish or bearish, actively search for CONTRADICTING
+operational data. Example: if all reports say "strong growth", search for customer churn,
+employee layoffs, delayed product launches, or market share loss. If all reports say "high
+risk", search for recent wins, partnerships, or positive regulatory developments.
+The goal is to STRESS-TEST the narrative, not confirm it.
+
 Focus on the highest-stakes facts:
 1. Revenue / financial figures and growth rates
 2. Market size claims (TAM/SAM/SOM)
