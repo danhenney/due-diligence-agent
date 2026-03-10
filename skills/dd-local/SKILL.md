@@ -115,6 +115,8 @@ You have WebSearch and Bash. For data tools, run Python via Bash:
 ## Research Quality Rules (MANDATORY)
 1. TOOL CALL BUDGET (HARD LIMIT — STOP if exceeded):
    - Total tool calls per agent: MAX 15 (including PDF reads, searches, data tools, Write)
+     Exception: competitor_analysis (biz version) gets MAX 25 tool calls / MAX 8 search calls
+     due to multi-BM analysis requiring more research per business line.
    - Search calls (Tavily + WebSearch combined): MAX 5
    - Plan ALL queries BEFORE searching. Write them out, then execute.
    - Do NOT repeat queries with slightly different wording (e.g., "Upstage funding"
@@ -517,41 +519,41 @@ Each section writer reads ONLY the relevant JSON files, keeping context lean.
 
 #### All 6 sections (parallel):
 
-**section_1_market** — 시장 및 산업 개괄 (5+ pages)
+**section_1_market** — 시장 및 산업 개괄 (7+ pages, 4,000+ words)
 - Reads: market_analysis.json, legal_regulatory.json (regulatory parts), _aggregator.json
-- Covers: TAM/SAM/SOM, CAGR, growth drivers, regulatory environment, Sovereign AI policy
+- Covers: TAM/SAM/SOM, CAGR, growth drivers, regulatory environment, 지역별 시장 세분화, 산업 밸류체인
 - Writes to: `dd-local-outputs/<slug>/_section_1.md`
 
-**section_2_target** — 타겟 개요 및 사업 구조 (5+ pages)
+**section_2_target** — 타겟 개요 및 사업 구조 (8+ pages, 4,500+ words)
 - Reads: tech_analysis.json, team_analysis.json, _aggregator.json
-- Covers: Business models, products, tech stack, IP/patents, R&D, EVERY leader profile, org structure
+- Covers: Business models, products (전 라인업), tech stack, IP/patents, R&D, EVERY leader profile (개인별 상세), org structure
 - Writes to: `dd-local-outputs/<slug>/_section_2.md`
 
-**section_3_financial** — 재무 성과 분석 (4+ pages)
+**section_3_financial** — 재무 성과 분석 (7+ pages, 4,000+ words)
 - Reads: financial_analysis.json, _aggregator.json
-- Covers: 5-year revenue, profitability, balance sheet, cash flow, ratios, burn rate
+- Covers: 5-year revenue, profitability, balance sheet, cash flow, ratios, burn rate, 동종업계 비율 비교, 연도별 상세 분석
 - Writes to: `dd-local-outputs/<slug>/_section_3.md`
 
-**section_4_competition** — 경쟁 구도 (4+ pages)
+**section_4_competition** — 경쟁 구도 (10+ pages, 6,000+ words)
 - Reads: competitor_analysis.json, tech_analysis.json (competitive comparison), _aggregator.json
-- Covers: EVERY competitor individually, market share, moat assessment, head-to-head tables
+- Covers: BM별 경쟁사 전수 분석, 각 경쟁사 상세 프로필, KSF 평가표, 포지셔닝 맵, 헤드투헤드 비교, moat assessment, 위협 시나리오
 - Writes to: `dd-local-outputs/<slug>/_section_4.md`
 
-**section_5_valuation** — 가치평가 (5+ pages)
+**section_5_valuation** — 가치평가 (7+ pages, 4,000+ words)
 - Reads: financial_analysis.json (valuation section), ra_synthesis.json, _aggregator.json
-- Covers: DCF, comps, investment rounds, fair value range, source claims verification
+- Covers: DCF 시나리오별 상세, comps 테이블, 민감도 분석, investment rounds, fair value range
 - Writes to: `dd-local-outputs/<slug>/_section_5.md`
 
-**section_6_risk** — 리스크 및 최종 의견 (5+ pages)
+**section_6_risk** — 리스크 및 최종 의견 (8+ pages, 4,500+ words)
 - Reads: risk_assessment.json, legal_regulatory.json, strategic_insight.json, dd_questions.json, review_agent.json, critique_agent.json
-- Covers: Risk matrix, legal/regulatory, recommendation, conditions, FULL DD questionnaire
+- Covers: Risk matrix (개별 리스크 심층 분석), legal/regulatory, recommendation, conditions, FULL DD questionnaire (전체 수록)
 - Writes to: `dd-local-outputs/<slug>/_section_6.md`
 
 **Section writer prompt template:**
 ```
 ## Role
 You are a senior investment analyst writing Section N of a Due Diligence Report.
-Language: <lang>. Write in detail — this section must be 4-5+ pages (2,500+ words).
+Language: <lang>. Write in detail — follow the page/word minimum specified for this section.
 
 ## Section: <section_title>
 <specific coverage instructions from above>
