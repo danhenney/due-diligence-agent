@@ -573,6 +573,12 @@ Language: <lang>. Write in detail — this section must be 4-5+ pages (2,500+ wo
 - Include ALL data from the source files — do not summarize or skip items
 - EVERY item (competitor/leader/risk/metric) gets its own detailed treatment
 - [DATA] tags go in the detailed body (after tables), NOT in the [INSIGHT] block
+- **용어 평이화 (MANDATORY)**: 전문 용어를 처음 사용할 때 괄호로 쉬운 설명을 붙일 것.
+  예시: "TAM(전체 시장 규모)", "CAGR(연평균 성장률)", "DCF(미래 현금흐름 할인 가치)",
+  "영업이익률(매출 대비 실제 벌어들인 이익 비율)", "PSR(주가매출비율, 매출 대비 기업가치)",
+  "모트(경쟁자가 쉽게 넘볼 수 없는 경쟁 우위)", "런웨이(현재 현금으로 버틸 수 있는 기간)",
+  "ratchet(투자자 보호 조항, 가치 하락 시 지분 보전)", "엑시트(투자금 회수 방법: IPO, M&A 등)"
+  두 번째 사용부터는 용어만 써도 됨. 일반인이 읽어도 이해 가능한 수준으로 작성할 것.
 
 ## Input Files (read with Read tool)
 <list of relevant JSON files>
@@ -610,6 +616,16 @@ cat dd-local-outputs/<slug>/_section_1.md dd-local-outputs/<slug>/_section_2.md 
 Step B: Write ONLY the front matter + executive summary to `_front.md`:
 - Report title, date, recommendation header
 - Private company disclaimer
+- **목차 (TABLE OF CONTENTS) — MANDATORY, Executive Summary 앞에 배치:**
+  ```
+  ## 목차
+  1. [시장 및 산업 개괄](#1-시장-및-산업-개괄)
+  2. [타겟 개요 및 사업 구조](#2-타겟-개요-및-사업-구조)
+  3. [재무 성과 분석](#3-재무-성과-분석)
+  4. [경쟁 구도](#4-경쟁-구도)
+  5. [가치평가](#5-가치평가)
+  6. [리스크 및 최종 의견](#6-리스크-및-최종-의견)
+  ```
 - Executive Summary (1-2 page overview with key metrics table, synthesizing all 6 sections)
 - **Investment Framings Table** (MANDATORY): Read `strategic_insight.json` and include
   a table showing ALL framings (scenarios) the strategic_insight agent developed.
@@ -704,7 +720,7 @@ Each agent has its OWN context window. The main session context stays lean.
 - **Batch Phase 1 in triplets** — 3 agents at a time, 2 batches total.
 - **Disk persistence** — every agent writes JSON to disk. If a crash happens, completed agents don't need re-running.
 - **Cross-pollination** — settled_claims/tensions/gaps MUST be passed to Phase 2 agents via _aggregator.json on disk.
-- **[DATA]/[INFERENCE] labeling** — ALL agents must prefix major statements.
+- **[확인사항]/[추론사항] labeling** — ALL agents must prefix major statements.
 - **Cross-verify 3+ sources** — key claims need 3+ independent sources. 1 source = low confidence.
 - **Search budget 4-6 calls** — plan queries before searching, no near-duplicate queries.
 - **Recency** — prefer newest sources, re-verify anything >6 months old.
