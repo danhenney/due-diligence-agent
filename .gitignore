@@ -14,7 +14,8 @@ env/
 reports/
 uploads/
 checkpoints.db
-*.pdf
+dd-local-outputs/
+docs_cache/
 
 # OS
 .DS_Store
