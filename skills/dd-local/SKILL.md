@@ -557,6 +557,19 @@ Language: <lang>. Write in detail — this section must be 4-5+ pages (2,500+ wo
 <specific coverage instructions from above>
 
 ## Format Rules
+- **섹션 요약 (SECTION SUMMARY — MANDATORY)**: 각 섹션의 대제목(## N. 제목) 바로 다음에
+  해당 섹션 전체 내용을 3~5문장으로 요약한 **[INSIGHT]** 블록을 배치할 것.
+  이 요약은 섹션의 핵심 데이터, 시장 규모, 성장률, 주요 리스크를 포함해야 하며,
+  독자가 이 블록만 읽어도 섹션의 핵심을 파악할 수 있어야 한다. Example:
+
+  ## 1. 시장 및 산업 개괄
+  **[INSIGHT] 아이아이컴바인드는 글로벌 럭셔리 아이웨어(TAM $30B), 니치 퍼퓸(TAM $94B),
+  프리미엄 F&B(TAM $12B) 등 3개 시장에 동시 포진한 K-럭셔리 복합기업이다. 핵심 사업인
+  젠틀몬스터는 EssilorLuxottica 과점 구조에서 독립 D2C 브랜드로 글로벌 M/S ~1.4%를 확보했으며,
+  2024년 매출 7,891억원(영업이익률 29.6%)으로 럭셔리급 수익성이 입증되고 있다.**
+
+  (then subsections with their own [INSIGHT] blocks follow)
+
 - Structure for every subsection: HEADLINE → **[INSIGHT]** → TABLE → detailed body
 - The [INSIGHT] block comes IMMEDIATELY after the heading, BEFORE any data/tables.
   It is the analyst's interpretive takeaway — bold the entire block. Example:
