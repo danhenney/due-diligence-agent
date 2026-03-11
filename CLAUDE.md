@@ -5,7 +5,7 @@ Multi-agent investment due diligence tool. 14 AI agents analyze a company across
 
 - **Stack:** LangGraph + Anthropic SDK (claude-sonnet-4-6) + Tavily + edgartools + PyMuPDF + ReportLab + python-pptx
 - **Deployed:** Streamlit Cloud at https://ddagents.streamlit.app/
-- **Repo:** https://github.com/danhenney/ddagent
+- **Repo:** https://github.com/d-biz-transformation/ddagent2
 
 ## Pipeline
 1. **Phase 1 — Parallel (6 agents):** Market Analysis, Competitor Analysis, Financial Analysis, Tech Analysis, Legal & Regulatory, Team Analysis
