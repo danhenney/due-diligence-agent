@@ -1,4 +1,5 @@
 """Streamlit web UI for the Due Diligence Agent."""
+import json
 import os
 import logging
 import shutil
@@ -144,7 +145,11 @@ def _analysis_worker(job_id: str, initial_state: dict, company: str, tmp_dir: st
 
 
 def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) -> None:
-    """Inner worker — runs the full pipeline with feedback loop support."""
+    """Inner worker — runs the full pipeline with feedback loop support.
+
+    Human checkpoints pause after Phase 1, Phase 2, and Phase 3.
+    The pipeline thread sleeps until the user approves via the UI.
+    """
     try:
         import pdf_report
         import pptx_report
@@ -161,6 +166,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         state: dict = dict(initial_state)
         progress: list[str] = []
         token_usage: dict = {}
+        auto_approve: bool = initial_state.get("auto_approve", False)
 
         _NO_LLM_NODES = {"input_processor", "phase1_aggregator", "phase2_aggregator",
                          "phase1_restart"}
@@ -178,6 +184,57 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             job = read_job(job_id)
             if job and job.get("status") == "cancelled":
                 raise _Cancelled()
+
+        def _collect_agent_outputs() -> dict:
+            """Gather current agent outputs for checkpoint review."""
+            agent_outputs = {}
+            for key in _AGENT_OUTPUT_KEYS:
+                val = state.get(key)
+                if val is not None:
+                    agent_outputs[key] = val
+            return agent_outputs
+
+        def _wait_for_checkpoint(phase_name: str) -> None:
+            """Pause pipeline and wait for human approval.
+
+            Sets job status to 'checkpoint', stores phase info and current
+            agent outputs. Polls every 3s until user approves or cancels.
+            """
+            if auto_approve:
+                return
+
+            # Persist current agent outputs so the UI can display them
+            agent_outputs = _collect_agent_outputs()
+            update_job(job_id, {
+                "status":             "checkpoint",
+                "checkpoint_phase":   phase_name,
+                "checkpoint_feedback": None,
+                "agent_outputs":      agent_outputs,
+                "progress":           progress.copy(),
+                "token_usage":        token_usage.copy(),
+            })
+
+            # Poll until user acts
+            while True:
+                time.sleep(3)
+                job = read_job(job_id)
+                if not job:
+                    raise _Cancelled()
+                status = job.get("status", "")
+                if status == "cancelled":
+                    raise _Cancelled()
+                if status == "approved":
+                    # Read back any user feedback
+                    feedback = job.get("checkpoint_feedback") or ""
+                    if feedback:
+                        state["checkpoint_feedback"] = feedback
+                    # Resume — set status back to running
+                    update_job(job_id, {
+                        "status": "running",
+                        "checkpoint_phase": None,
+                        "checkpoint_feedback": None,
+                    })
+                    return
 
         def _step(fn, node_name: str) -> None:
             _check_cancelled()
@@ -205,15 +262,23 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 "token_usage": token_usage.copy(),
             })
 
-        # Main pipeline
+        # ── Phase 1: Research ────────────────────────────────────────────────
         _step(input_processor,        "input_processor")
         _step(phase1_parallel,        "phase1_parallel")
         _step(phase1_aggregator,      "phase1_aggregator")
+
+        # ═══ CHECKPOINT: Phase 1 complete ═══
+        _wait_for_checkpoint("phase1")
+
+        # ── Phase 2: Synthesis ───────────────────────────────────────────────
         _step(phase2_parallel,        "phase2_parallel")
         _step(strategic_insight_node, "strategic_insight")
         _step(phase2_aggregator,      "phase2_aggregator")
 
-        # Phase 3 — review + critique, with at most 1 rerun
+        # ═══ CHECKPOINT: Phase 2 complete ═══
+        _wait_for_checkpoint("phase2")
+
+        # ── Phase 3: Review + critique ───────────────────────────────────────
         _step(review_agent_node,   "review_agent")
         _step(critique_agent_node, "critique_agent")
 
@@ -239,8 +304,12 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             progress.append(f"critique_router:{route2}")
             update_job(job_id, {"progress": progress.copy()})
 
-        # Forward path
         _step(dd_questions_node,      "dd_questions")
+
+        # ═══ CHECKPOINT: Phase 3 complete ═══
+        _wait_for_checkpoint("phase3")
+
+        # ── Phase 4: Report ──────────────────────────────────────────────────
         _step(report_structure_node,  "report_structure")
         _step(report_writer_node,     "report_writer")
 
@@ -398,6 +467,20 @@ _UI = {
         "agent_outputs_heading":"📊 Agent Outputs",
         "no_agent_outputs":     "No individual agent outputs available for this analysis.",
         "view_details_btn":     "📄 Details",
+        "auto_approve_label":   "Skip human review (auto-approve all phases)",
+        "auto_approve_help":    "When checked, the pipeline runs straight through without pausing for review.",
+        "checkpoint_heading":   "🔍 {} — Review Required",
+        "checkpoint_phase1_title": "Phase 1 Complete: Research & Analysis",
+        "checkpoint_phase1_desc":  "6 research agents have finished. Review their outputs below before proceeding to synthesis.",
+        "checkpoint_phase2_title": "Phase 2 Complete: Synthesis",
+        "checkpoint_phase2_desc":  "R&A Synthesis, Risk Assessment, and Strategic Insight are complete. Review before proceeding to critique.",
+        "checkpoint_phase3_title": "Phase 3 Complete: Review & Critique",
+        "checkpoint_phase3_desc":  "Review, Critique, and DD Questions are complete. Review before generating the final report.",
+        "checkpoint_paused":       "⏸ Paused — awaiting review",
+        "checkpoint_feedback_label":      "Feedback (optional)",
+        "checkpoint_feedback_placeholder": "Add notes or adjustments for the next phase…",
+        "checkpoint_approve_btn":  "✅ Approve & Continue",
+        "checkpoint_cancel_btn":   "⛔ Cancel Analysis",
     },
     "ko": {
         "app_title":            "## 📊 실사 에이전트",
@@ -472,6 +555,20 @@ _UI = {
         "agent_outputs_heading":"📊 에이전트 출력",
         "no_agent_outputs":     "이 분석에 대한 개별 에이전트 출력이 없습니다.",
         "view_details_btn":     "📄 상세",
+        "auto_approve_label":   "자동 승인 (단계별 리뷰 건너뛰기)",
+        "auto_approve_help":    "체크하면 리뷰 없이 전체 파이프라인이 자동으로 실행됩니다.",
+        "checkpoint_heading":   "🔍 {} — 리뷰 필요",
+        "checkpoint_phase1_title": "1단계 완료: 리서치 & 분석",
+        "checkpoint_phase1_desc":  "6개 리서치 에이전트가 완료되었습니다. 아래 결과를 검토한 후 종합 단계로 진행하세요.",
+        "checkpoint_phase2_title": "2단계 완료: 종합",
+        "checkpoint_phase2_desc":  "R&A 종합, 리스크 평가, 전략적 인사이트가 완료되었습니다. 비평 단계 진행 전 검토하세요.",
+        "checkpoint_phase3_title": "3단계 완료: 검토 & 비평",
+        "checkpoint_phase3_desc":  "검토, 비평, DD 질문서가 완료되었습니다. 최종 보고서 생성 전 검토하세요.",
+        "checkpoint_paused":       "⏸ 일시정지 — 리뷰 대기 중",
+        "checkpoint_feedback_label":      "피드백 (선택)",
+        "checkpoint_feedback_placeholder": "다음 단계를 위한 메모나 조정 사항을 입력하세요…",
+        "checkpoint_approve_btn":  "✅ 승인 & 계속",
+        "checkpoint_cancel_btn":   "⛔ 분석 취소",
     },
 }
 
@@ -1324,6 +1421,11 @@ if st.session_state.phase == "form":
             accept_multiple_files=True,
             help=t("docs_help"),
         )
+        auto_approve = st.checkbox(
+            t("auto_approve_label"),
+            value=False,
+            help=t("auto_approve_help"),
+        )
         st.markdown("")
         st.caption(t("cost_caption"))
         run = st.button(
@@ -1384,7 +1486,13 @@ if st.session_state.phase == "form":
             else:
                 eta_label = ""
 
-            qi_status = t("queue_status_running") if qi.get("status") == "running" else t("queue_status_queued")
+            _qi_st = qi.get("status", "")
+            if _qi_st == "checkpoint":
+                qi_status = t("checkpoint_paused")
+            elif _qi_st == "running" or _qi_st == "approved":
+                qi_status = t("queue_status_running")
+            else:
+                qi_status = t("queue_status_queued")
             qi_company = qi.get("company") or qi.get("id", "")[:8]
 
             c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1.2, 0.8])
@@ -1455,6 +1563,9 @@ if st.session_state.phase == "form":
             "phase1_context": None,
             "feedback_loop_count": 0,
             "weak_sections": [],
+            # Human checkpoints
+            "checkpoint_feedback": None,
+            "auto_approve": auto_approve,
             # Bookkeeping
             "messages": [],
             "errors": [],
@@ -1562,6 +1673,101 @@ elif st.session_state.phase == "running":
             st.session_state.viewing_job = None
             st.session_state.phase = "form"
             st.rerun()
+
+    elif job["status"] == "checkpoint":
+        # ── Human checkpoint review screen ────────────────────────────────
+        checkpoint_phase = job.get("checkpoint_phase", "")
+        _phase_labels = {
+            "phase1": t("checkpoint_phase1_title"),
+            "phase2": t("checkpoint_phase2_title"),
+            "phase3": t("checkpoint_phase3_title"),
+        }
+        _phase_desc = {
+            "phase1": t("checkpoint_phase1_desc"),
+            "phase2": t("checkpoint_phase2_desc"),
+            "phase3": t("checkpoint_phase3_desc"),
+        }
+        phase_title = _phase_labels.get(checkpoint_phase, checkpoint_phase)
+        phase_desc = _phase_desc.get(checkpoint_phase, "")
+
+        _cp_hdr, _cp_lang = st.columns([5, 1])
+        with _cp_hdr:
+            st.markdown(f"## {t('checkpoint_heading', company)}")
+            st.info(f"**{phase_title}**\n\n{phase_desc}")
+        with _cp_lang:
+            st.markdown("")
+            _lang_toggle("checkpoint")
+
+        # Show progress so far
+        progress = job.get("progress") or []
+        start_time = job.get("start_time") or time.time()
+        elapsed_sec = time.time() - start_time
+        _node_labels = _NODE_LABELS_KO if st.session_state.get("ui_lang") == "ko" else _NODE_LABELS_EN
+
+        unique_nodes = set(progress)
+        completed_weight = sum(NODE_WEIGHTS.get(n, 0) for n in unique_nodes)
+        total_weight = sum(NODE_WEIGHTS.values())
+        pct = min(completed_weight / total_weight, 1.0)
+
+        def _fmt_time_cp(seconds: float) -> str:
+            seconds = int(seconds)
+            if seconds < 60:
+                return f"{seconds}s"
+            return f"{seconds // 60}m {seconds % 60:02d}s"
+
+        st.progress(pct, text=t(
+            "progress_text",
+            pct=int(pct * 100),
+            done=len(progress),
+            total=len(_node_labels),
+            elapsed=_fmt_time_cp(elapsed_sec),
+            eta=t("checkpoint_paused"),
+        ))
+
+        # Show token cost
+        token_usage_cp = job.get("token_usage") or {}
+        if token_usage_cp:
+            total_cost = sum(v.get("cost_usd", 0) for v in token_usage_cp.values())
+            total_in = sum(v.get("input_tokens", 0) for v in token_usage_cp.values())
+            total_out = sum(v.get("output_tokens", 0) for v in token_usage_cp.values())
+            st.caption(t("api_cost", cost=total_cost, inp=total_in, out=total_out))
+
+        st.divider()
+
+        # Show agent outputs for review
+        _ao_cp = job.get("agent_outputs") or {}
+        if _ao_cp:
+            st.markdown(f"### {t('agent_outputs_heading')}")
+            _render_agent_outputs(_ao_cp, st.session_state.get("ui_lang", "en"))
+            st.divider()
+
+        # Feedback text area
+        feedback_text = st.text_area(
+            t("checkpoint_feedback_label"),
+            placeholder=t("checkpoint_feedback_placeholder"),
+            height=100,
+            key=f"cp_feedback_{job_id}_{checkpoint_phase}",
+        )
+
+        # Action buttons
+        col_approve, col_cancel = st.columns([1, 1])
+        with col_approve:
+            if st.button(t("checkpoint_approve_btn"), type="primary", use_container_width=True,
+                         key=f"cp_approve_{job_id}"):
+                update_job(job_id, {
+                    "status": "approved",
+                    "checkpoint_feedback": feedback_text if feedback_text.strip() else None,
+                })
+                st.rerun()
+        with col_cancel:
+            if st.button(t("checkpoint_cancel_btn"), use_container_width=True,
+                         key=f"cp_cancel_{job_id}"):
+                update_job(job_id, {"status": "cancelled"})
+                if job_id in st.session_state.active_jobs:
+                    st.session_state.active_jobs.remove(job_id)
+                st.session_state.viewing_job = None
+                st.session_state.phase = "form"
+                st.rerun()
 
     elif job["status"] == "queued":
         # Waiting for a semaphore slot — show queue message

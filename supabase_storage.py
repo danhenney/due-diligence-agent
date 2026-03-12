@@ -93,6 +93,7 @@ _JOBS_KNOWN_COLUMNS = {
     "id", "status", "progress", "error", "start_time", "pdf_path",
     "recommendation", "final_report", "token_usage", "company",
     "pptx_path", "docx_path", "agent_outputs",
+    "checkpoint_phase", "checkpoint_feedback",
 }
 
 
@@ -113,7 +114,8 @@ def update_job(job_id: str, updates: dict) -> None:
         err_msg = str(first_err).lower()
         # Only strip columns if the error is column-related (schema mismatch)
         if "column" in err_msg or "schema" in err_msg or "could not find" in err_msg:
-            optional_cols = ["agent_outputs", "docx_path", "pptx_path", "company"]
+            optional_cols = ["agent_outputs", "docx_path", "pptx_path", "company",
+                             "checkpoint_phase", "checkpoint_feedback"]
             for col in optional_cols:
                 row.pop(col, None)
             try:
@@ -126,15 +128,16 @@ def update_job(job_id: str, updates: dict) -> None:
 
 
 def load_queue() -> list[dict]:
-    """Load all running/queued jobs (global queue visible to all users)."""
+    """Load all active jobs (running/queued/checkpoint/approved)."""
     try:
         sb = _get_client()
+        _active = ["running", "queued", "checkpoint", "approved"]
         # Try with company column; fall back without it if column doesn't exist yet
         try:
             resp = (
                 sb.table("jobs")
                 .select("id, company, status, progress, start_time, token_usage")
-                .in_("status", ["running", "queued"])
+                .in_("status", _active)
                 .order("start_time", desc=False)
                 .execute()
             )
@@ -142,7 +145,7 @@ def load_queue() -> list[dict]:
             resp = (
                 sb.table("jobs")
                 .select("id, status, progress, start_time, token_usage")
-                .in_("status", ["running", "queued"])
+                .in_("status", _active)
                 .order("start_time", desc=False)
                 .execute()
             )
@@ -158,13 +161,13 @@ def load_queue() -> list[dict]:
 
 
 def cleanup_stale_jobs() -> int:
-    """Cancel all running/queued jobs (used on app startup after reboot)."""
+    """Cancel all running/queued/checkpoint jobs (used on app startup after reboot)."""
     try:
         sb = _get_client()
         resp = (
             sb.table("jobs")
             .select("id")
-            .in_("status", ["running", "queued"])
+            .in_("status", ["running", "queued", "checkpoint", "approved"])
             .execute()
         )
         rows = resp.data or []

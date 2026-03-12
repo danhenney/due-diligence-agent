@@ -46,6 +46,10 @@ class DueDiligenceState(TypedDict):
     feedback_loop_count: int          # starts 0, max 2
     weak_sections: list[str]          # agent names needing re-run
 
+    # ── Human checkpoints ────────────────────────────────────────────────
+    checkpoint_feedback: str | None   # user feedback from last checkpoint
+    auto_approve: bool                # True = skip human checkpoints
+
     # ── Shared bookkeeping ────────────────────────────────────────────────
     messages: Annotated[list, add_messages]
     errors: Annotated[list[str], operator.add]
