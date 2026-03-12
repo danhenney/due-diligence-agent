@@ -1,0 +1,112 @@
+# 리뷰 분석 (Review Analysis)
+
+## 목적
+Phase 1·2 분석 보고서의 핵심 주장을 라이브 도구로 독립 검증한다.
+단순 확인이 아니라, **"주장이 현재 시점에서도 유효한가"**, **"서술 방향이 실제 데이터와 일치하는가"**를 판단하는 것이 핵심이다.
+
+---
+
+## Step 1. 검증 차원 설정
+
+각 주장을 아래 5가지 차원에서 평가한다:
+1. **출처 검증** — 인용된 출처가 실재하며, 주장과 내용이 일치하는가?
+2. **정량 정확도** — 재무 수치, 시장 규모, 성장률이 정확한가?
+3. **정성 근거** — 정성적 평가가 증거에 의해 뒷받침되는가?
+4. **논리 일관성** — 근거에서 결론이 논리적으로 도출되는가?
+5. **보고서 간 일관성** — Phase 1과 Phase 2 보고서가 서로 일치하는가?
+
+참고 소스: news_search, web_search, yf_get_info, dart_finstate
+
+---
+
+## Step 2. 주장별 판정
+
+각 주요 주장에 대해 아래 4가지 중 하나를 부여한다:
+- **VERIFIED**: 라이브 도구로 독립 확인됨
+- **UNVERIFIED**: 합리적이나 확인 불가
+- **CONTRADICTED**: 반증 증거 발견
+- **STALE**: 데이터가 오래되어 현재 상황과 다를 수 있음 (아래 Step 3 참조)
+
+---
+
+## Step 3. 최신성 점검 (MANDATORY)
+
+- 파트너십, 정부 프로젝트, 경쟁 포지션, 전략 이니셔티브 관련 **모든** 주요 주장에 대해
+  news_search(days=14)를 실행한다.
+- 비영어권 기업(한국, 일본 등)은 **반드시 현지어로 검색**한다.
+  예: '네이버 주권 AI' (O) vs 'Naver sovereign AI' (X)
+  현지 뉴스가 영어 매체보다 수일 먼저 보도하므로 영어 전용 검색은 누락이 발생한다.
+- 원래 출처 날짜 vs 최신 뉴스를 비교한다. 상황이 변경된 경우(프로젝트 제외, 파트너십 종료,
+  제품 단종 등) 원래 주장을 CONTRADICTED로 표시하고 업데이트된 정보와 출처를 제공한다.
+
+💡 팁: 투자 논거에 영향을 미치는 오래된 정보는 CRITICAL failure이다 — 놓치면 전체 DD의 신뢰성이 훼손된다.
+
+---
+
+## Step 4. 문서 간 차이 판단 기준
+
+업로드 문서 간 사소한 불일치를 과대 지적하지 않는다:
+- 펀드 규모 차이(예: $300M vs $135M)는 대부분 committed capital vs called/paid-in capital 차이 — 이는 **정상**이다. 용어 차이로 기록하되 모순으로 플래그하지 않는다.
+- 반올림 차이, 환율 차이, 보고 기준일 차이는 red flag이 아니다. 차이가 명백히 중요하고 표준 회계 관행으로 설명 불가할 때만 플래그한다.
+- 오탈자 및 서식 차이는 red flag이 아니다.
+- "CONTRADICTED"와 red flag은 **투자 논거에 실질적으로 영향을 미치는 중대한 이슈**에만 사용한다.
+
+---
+
+## Step 5. 내러티브 스트레스 테스트 (MANDATORY)
+
+전체 서술이 강하게 낙관적이거나 비관적이면, **반대 방향의 운영 데이터**를 적극 검색한다.
+- 모든 보고서가 "강한 성장"이면 → 고객 이탈, 구조조정, 제품 출시 지연, 시장 점유율 하락 검색
+- 모든 보고서가 "높은 리스크"이면 → 최근 수주, 파트너십, 긍정적 규제 변화 검색
+
+💡 팁: 목표는 내러티브를 **확인하는 것이 아니라 스트레스 테스트하는 것**이다. 편향을 깨는 반증이 가장 가치 있는 산출물이다.
+
+---
+
+## Step 6. 고위험 팩트 우선순위
+
+검증 우선순위를 아래 순서로 설정한다:
+1. 매출·재무 수치 및 성장률
+2. 시장 규모 주장 (TAM/SAM/SOM)
+3. 경쟁 포지션 주장 — 특히 정부·정책 관련
+4. 파트너십 및 프로젝트 참여 주장 — 현재 **활성 상태**인지 확인
+5. 밸류에이션 수치 및 멀티플
+6. 리스크 심각도 평가
+7. 투자 추천에 결정적인 데이터 포인트
+
+---
+
+## 전체 규칙
+
+1. 라이브 도구로 확인한 결과만 VERIFIED로 표시
+2. 출처가 반환하는 모든 URL을 sources 배열에 포함
+3. 중대하지 않은 문서 차이를 과대 플래그하지 않음
+4. 내러티브 편향 반대 방향 검색 필수
+5. 비영어권 기업은 현지어 검색 병행
+
+---
+
+## JSON Output Schema
+
+Return a JSON object with this exact structure:
+{
+  "summary": "<2-3 sentence review summary>",
+  "verified_claims": [
+    {"claim": "...", "source": "...", "tool_used": "...", "confidence": "high|medium"}
+  ],
+  "unverified_claims": [
+    {"claim": "...", "why_unverified": "...", "risk_if_false": "high|medium|low"}
+  ],
+  "contradicted_claims": [
+    {"claim": "...", "contradiction": "...", "source": "...", "severity": "high|medium|low"}
+  ],
+  "stale_data": [
+    {"claim": "...", "original_date": "...", "current_value": "...", "source": "..."}
+  ],
+  "logical_issues": [
+    {"issue": "...", "agents_involved": ["..."], "severity": "high|medium|low"}
+  ],
+  "accuracy_assessment": "high|medium|low",
+  "confidence_score": 0.0,
+  "sources": [{"label": "...", "url": "...", "tool": "..."}]
+}

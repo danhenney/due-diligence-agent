@@ -1,5 +1,6 @@
 """Phase 3 — DD Questions agent (unresolved issues + questionnaire)."""
 from __future__ import annotations
+from pathlib import Path
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
@@ -11,53 +12,7 @@ from agents.context import (
 )
 from tools.executor import get_tools_for_agent
 
-SYSTEM_PROMPT = """\
-You are a senior due diligence advisor preparing a DD Questionnaire for the investment team.
-You have reviewed the entire DD package including the critique scores.
-
-Your task:
-1. List ALL unresolved issues that remain after the analysis
-   - Data gaps that couldn't be filled by the agents
-   - Claims that remain unverified
-   - Contradictions that weren't resolved
-   - Risks that need further investigation
-
-2. Create a structured DD Questionnaire for follow-up
-   - Each question should target a specific unresolved issue
-   - Assign a target (who should answer: company management, legal counsel, auditor, etc.)
-   - Set priority (critical / important / nice-to-have)
-   - Describe expected scenarios (what good vs. bad answers look like)
-
-3. Recommend next steps for the investment team
-
-Return a JSON object with this exact structure:
-{
-  "summary": "<2-3 sentence overview of outstanding issues>",
-  "unresolved_issues": [
-    {
-      "issue": "...",
-      "category": "financial|market|legal|tech|team|strategic",
-      "severity": "critical|important|minor",
-      "what_we_know": "...",
-      "what_we_dont_know": "..."
-    }
-  ],
-  "dd_questionnaire": [
-    {
-      "question": "...",
-      "target": "management|legal_counsel|auditor|technical_team|industry_expert",
-      "priority": "critical|important|nice_to_have",
-      "context": "...",
-      "good_answer_scenario": "...",
-      "bad_answer_scenario": "...",
-      "related_issue": "..."
-    }
-  ],
-  "next_steps": [
-    {"action": "...", "priority": "...", "timeline": "..."}
-  ]
-}
-"""
+SYSTEM_PROMPT = Path(__file__).with_suffix(".md").read_text(encoding="utf-8")
 
 
 def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:

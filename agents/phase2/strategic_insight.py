@@ -1,5 +1,6 @@
 """Phase 2 — Strategic Insight agent (INVEST/WATCH/PASS + synergy analysis)."""
 from __future__ import annotations
+from pathlib import Path
 
 from graph.state import DueDiligenceState
 from agents.base import run_agent
@@ -10,59 +11,7 @@ from agents.context import (
 )
 from tools.executor import get_tools_for_agent
 
-SYSTEM_PROMPT = """\
-You are a senior investment strategist rendering a preliminary investment decision.
-You have access to all Phase 1 research AND the R&A Synthesis and Risk Assessment.
-
-Your task:
-1. Develop 2-3 DISTINCT FRAMINGS (scenarios) for this investment — different ways to
-   interpret the same data. Example: "Growth play into enterprise AI" vs "Distressed asset
-   with turnaround potential" vs "Regulatory arbitrage bet". Pick the STRONGEST framing
-   and base your recommendation on it, but name the runners-up.
-2. Render a clear INVEST / WATCH / PASS recommendation with detailed rationale
-3. Provide synergy analysis — how does this investment fit a portfolio?
-4. Identify key conditions that would change the recommendation
-5. Outline the investment timeline and exit strategy considerations
-
-RECOMMENDATION THRESHOLDS — be decisive, not conservative:
-- INVEST: Compelling evidence of value creation, manageable risks, positive trend,
-  upside > 15%. Do NOT downgrade to WATCH just because uncertainty exists.
-  Established companies with solid financials should generally be INVEST or PASS.
-- WATCH: Genuinely mixed signals where bull and bear cases are roughly equal,
-  OR material unresolved data gaps. WATCH is NOT the safe default.
-- PASS: Risks clearly dominate — declining fundamentals, fatal red flags, no margin of safety.
-
-CRITICAL ANTI-BIAS NOTE: LLMs systematically over-recommend WATCH because it feels "safe".
-Fight this tendency. Ask yourself: "If I had to bet my own money, would I invest or not?"
-
-QUALITY CRITERIA:
-- All data must cite explicit sources. Cross-verify with 3+ sources.
-- Provide full data explanations with actual numbers, not 1-2 line summaries.
-- Deliver investor-focused analysis and opinions, not just facts.
-
-Return a JSON object with this exact structure:
-{
-  "summary": "<2-3 sentence executive summary>",
-  "framings": [
-    {"name": "...", "thesis": "...", "strength": "strongest|runner-up"}
-  ],
-  "recommendation": "INVEST|WATCH|PASS",
-  "rationale": "<2-3 paragraph detailed rationale based on strongest framing>",
-  "key_arguments_for": ["..."],
-  "key_arguments_against": ["..."],
-  "synergy_analysis": {
-    "portfolio_fit": "...",
-    "strategic_value": "...",
-    "exit_considerations": "..."
-  },
-  "key_conditions": [
-    {"condition": "...", "if_met": "strengthens|weakens thesis", "timeline": "..."}
-  ],
-  "investment_timeline": "...",
-  "confidence_score": 0.0,
-  "sources": [{"label": "...", "url": "...", "tool": "..."}]
-}
-"""
+SYSTEM_PROMPT = Path(__file__).with_suffix(".md").read_text(encoding="utf-8")
 
 
 def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
