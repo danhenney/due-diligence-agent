@@ -396,7 +396,7 @@ from config import validate_config
 _UI = {
     "en": {
         "app_title":            "## 📊 Due Diligence Agent",
-        "app_subtitle":         "Submit a company → 15 AI agents analyze it in 4 phases → full investment memo + PDF",
+        "app_subtitle":         "Submit a company → 15 AI agents analyze it in 4 phases → human review at every stage → full investment memo + PDF",
         "history_btn":          "🕐 History",
         "form_heading":         "#### Submit a Company",
         "company_label":        "Company Name",
@@ -409,7 +409,7 @@ _UI = {
         "cost_caption":         "Typical cost: **$1 – $5 per analysis** · 15 agents · claude-sonnet-4-6 · $3/M input · $15/M output",
         "run_btn":              "🔍  Run Due Diligence",
         "pipeline_heading":     "#### Agent Pipeline Flow",
-        "pipeline_caption":     "Orchestrator reviews each phase — scores agents, revises weak ones (red dashed), then passes to the next phase.",
+        "pipeline_caption":     "Each phase pauses for **human review** (pink octagons) before proceeding. Orchestrator scores agents, revises weak ones (red dashed).",
         "directory_heading":    "#### Agent Directory",
         "directory_caption":    "Click any agent to see its methodology and data sources.",
         "how_it_works":         "**How it works:**",
@@ -484,7 +484,7 @@ _UI = {
     },
     "ko": {
         "app_title":            "## 📊 실사 에이전트",
-        "app_subtitle":         "기업을 입력하면 → AI 에이전트 15개가 4단계로 분석 → 투자 메모 + PDF 완성",
+        "app_subtitle":         "기업을 입력하면 → AI 에이전트 15개가 4단계로 분석 → 매 단계 사람이 검토 → 투자 메모 + PDF 완성",
         "history_btn":          "🕐 분석 기록",
         "form_heading":         "#### 기업 분석 요청",
         "company_label":        "기업명",
@@ -497,7 +497,7 @@ _UI = {
         "cost_caption":         "예상 비용: **분석당 $1 – $5** · 에이전트 15개 · claude-sonnet-4-6 · 입력 $3/M · 출력 $15/M",
         "run_btn":              "🔍  실사 분석 시작",
         "pipeline_heading":     "#### 에이전트 파이프라인",
-        "pipeline_caption":     "오케스트레이터가 각 단계를 검토 — 에이전트 점수 평가, 약한 에이전트 재실행(빨간 점선), 통과 후 다음 단계로 진행.",
+        "pipeline_caption":     "매 단계마다 **사람의 리뷰**(분홍 팔각형)를 거친 후 다음 단계로 진행. 오케스트레이터가 점수 평가 후 약한 에이전트 재실행(빨간 점선).",
         "directory_heading":    "#### 에이전트 목록",
         "directory_caption":    "에이전트를 클릭하면 분석 방법론과 데이터 소스를 확인할 수 있습니다.",
         "how_it_works":         "**분석 방법:**",
@@ -660,6 +660,9 @@ digraph pipeline {
         team [label="Team\nAnalysis"      fillcolor="#bfdbfe" color="#1d4ed8" fontcolor="#1e3a8a"];
     }
 
+    cp1 [label="👤 Human\nReview 1" fillcolor="#fce7f3" color="#db2777" fontcolor="#831843"
+         shape=octagon fontsize=8];
+
     subgraph cluster_p2 {
         label="Phase 2  —  Synthesis" fontsize=9 color="#7c3aed"
         fillcolor="#f5f3ff" style="rounded,filled";
@@ -667,6 +670,9 @@ digraph pipeline {
         risk [label="Risk\nAssessment" fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
         si   [label="Strategic\nInsight" fillcolor="#ddd6fe" color="#7c3aed" fontcolor="#4c1d95"];
     }
+
+    cp2 [label="👤 Human\nReview 2" fillcolor="#fce7f3" color="#db2777" fontcolor="#831843"
+         shape=octagon fontsize=8];
 
     subgraph cluster_p3 {
         label="Phase 3  —  Review & Critique" fontsize=9 color="#d97706"
@@ -679,6 +685,9 @@ digraph pipeline {
     router [label="Critique\nRouter" fillcolor="#a7f3d0" color="#059669" fontcolor="#064e3b"
             shape=diamond fontsize=8];
 
+    cp3 [label="👤 Human\nReview 3" fillcolor="#fce7f3" color="#db2777" fontcolor="#831843"
+         shape=octagon fontsize=8];
+
     subgraph cluster_p4 {
         label="Phase 4  —  Report" fontsize=9 color="#1e40af"
         fillcolor="#eff6ff" style="rounded,filled";
@@ -688,14 +697,16 @@ digraph pipeline {
 
     START -> inp;
     inp -> mkt; inp -> comp; inp -> fin; inp -> tec; inp -> leg; inp -> team;
-    mkt -> ras; comp -> ras; fin -> ras; tec -> ras; leg -> ras; team -> ras;
-    mkt -> risk; comp -> risk; fin -> risk; tec -> risk; leg -> risk; team -> risk;
+    mkt -> cp1; comp -> cp1; fin -> cp1; tec -> cp1; leg -> cp1; team -> cp1;
+    cp1 -> ras; cp1 -> risk;
     ras -> si; risk -> si;
-    si -> rev;
+    si -> cp2;
+    cp2 -> rev;
     rev -> crit;
     crit -> router;
     router -> ddq [label=" pass " fontsize=7 color="#059669"];
-    ddq -> rstr;
+    ddq -> cp3;
+    cp3 -> rstr;
     rstr -> rwrt;
     rwrt -> END;
 
@@ -712,7 +723,7 @@ AGENT_PHASES = [
         "label": "Phase 1 — Parallel Research",
         "color": "#1d4ed8",
         "bg": "#eff6ff",
-        "description": "6 specialist agents run **simultaneously**. Each independently researches a different dimension of the company.",
+        "description": "6 specialist agents run **simultaneously**. Each independently researches a different dimension of the company. **Human review required** before proceeding to synthesis.",
         "agents": [
             {
                 "icon": "🌍",
@@ -798,7 +809,7 @@ AGENT_PHASES = [
         "label": "Phase 2 — Synthesis",
         "color": "#7c3aed",
         "bg": "#f5f3ff",
-        "description": "R&A Synthesis + Risk Assessment run **in parallel**, then Strategic Insight runs **sequentially** (needs both).",
+        "description": "R&A Synthesis + Risk Assessment run **in parallel**, then Strategic Insight runs **sequentially** (needs both). **Human review required** before proceeding to critique.",
         "agents": [
             {
                 "icon": "📊",
@@ -843,7 +854,7 @@ AGENT_PHASES = [
         "label": "Phase 3 — Review & Critique",
         "color": "#b45309",
         "bg": "#fffbeb",
-        "description": "Sequential: **Review** (verify claims) → **Critique** (score 5 criteria) → **DD Questions**. The Critique agent triggers a **feedback loop** if quality is insufficient (max 2 iterations).",
+        "description": "Sequential: **Review** (verify claims) → **Critique** (score 5 criteria) → **DD Questions**. The Critique agent triggers a **feedback loop** if quality is insufficient (max 2 iterations). **Human review required** before generating the final report.",
         "agents": [
             {
                 "icon": "🔎",
@@ -931,7 +942,7 @@ def _get_agent_phases(lang: str) -> list:
     ko_meta = [
         {
             "label": "1단계 — 병렬 리서치",
-            "description": "6개의 전문 에이전트가 **동시에** 실행됩니다. 각각 기업의 다른 차원을 독립적으로 리서치합니다.",
+            "description": "6개의 전문 에이전트가 **동시에** 실행됩니다. 각각 기업의 다른 차원을 독립적으로 리서치합니다. 종합 단계 진행 전 **사람의 리뷰**가 필요합니다.",
             "agents": [
                 ("🌍", "시장 분석",          "TAM/SAM/SOM, CAGR, 시장 트렌드를 분석합니다."),
                 ("🏢", "경쟁사 분석",        "모든 사업 라인의 경쟁사를 파악하고 비교 매트릭스를 구축합니다."),
@@ -943,7 +954,7 @@ def _get_agent_phases(lang: str) -> list:
         },
         {
             "label": "2단계 — 종합",
-            "description": "R&A 종합 + 리스크 평가가 **병렬**로 실행되고, 전략적 인사이트가 **순차적**으로 실행됩니다.",
+            "description": "R&A 종합 + 리스크 평가가 **병렬**로 실행되고, 전략적 인사이트가 **순차적**으로 실행됩니다. 비평 단계 진행 전 **사람의 리뷰**가 필요합니다.",
             "agents": [
                 ("📊", "R&A 종합",           "1단계를 3-5개 핵심 투자 논거 + CDD/LDD/FDD 스코어카드로 종합합니다."),
                 ("⚠️", "리스크 평가",         "모든 리스크를 확률/영향/심각도 매트릭스로 분석합니다."),
@@ -952,7 +963,7 @@ def _get_agent_phases(lang: str) -> list:
         },
         {
             "label": "3단계 — 검토 & 비평",
-            "description": "순차: **검토** (주장 검증) → **비평** (5개 기준 채점) → **DD 질문서**. 비평 에이전트가 품질 미달 시 **피드백 루프**를 실행합니다 (최대 2회).",
+            "description": "순차: **검토** (주장 검증) → **비평** (5개 기준 채점) → **DD 질문서**. 비평 에이전트가 품질 미달 시 **피드백 루프**를 실행합니다 (최대 2회). 최종 보고서 생성 전 **사람의 리뷰**가 필요합니다.",
             "agents": [
                 ("🔎", "검토 에이전트",       "출처 검증, 정량적 정확도, 논리적 일관성을 확인합니다."),
                 ("📋", "비평 에이전트",       "5개 기준 채점(1-10): 논리, 완성도, 정확도, 서술 편향, 인사이트 실효성"),
