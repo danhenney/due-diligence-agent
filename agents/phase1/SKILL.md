@@ -18,11 +18,11 @@ Phase-to-phase data flows through disk files, not through the orchestrator's con
 
 ## Architecture
 
-14 agents across 4 phases. Execution pattern matches the API version exactly.
+14 agents across 4 phases with a **human checkpoint** after Phase 2.
 
 ```
-Phase 1 (parallel, batches of 3):
-  market_analysis, competitor_analysis, financial_analysis
+Phase 1 (all 6 parallel):
+  market_analysis, competitor_analysis, financial_analysis,
   tech_analysis, legal_regulatory, team_analysis
 
 Phase 1 Aggregator (subagent reads disk, writes _aggregator.json):
@@ -31,6 +31,10 @@ Phase 1 Aggregator (subagent reads disk, writes _aggregator.json):
 Phase 2 (ra_synthesis + risk_assessment parallel, then strategic_insight sequential):
   ra_synthesis, risk_assessment
   strategic_insight
+
+═══ HUMAN CHECKPOINT ═══
+  Present summary + recommendation to user. Wait for approval/feedback.
+  User can: (a) proceed, (b) provide feedback to adjust, (c) stop.
 
 Phase 3 (review sequential, then critique + dd_questions parallel):
   review_agent → (critique_agent + dd_questions)
@@ -465,6 +469,54 @@ Pick the STRONGEST framing and name runners-up.
 
 **strategic_insight has NO tools** - works from disk data only.
 
+**strategic_insight return protocol (MODIFIED):**
+Unlike other agents that return only "Done. File: path", strategic_insight must also return a brief summary:
+```
+Done. File: dd-local-outputs/<slug>/strategic_insight.json
+RECOMMENDATION: INVEST|WATCH|PASS
+CONFIDENCE: X/10
+FRAMINGS:
+- Framing 1 (selected): <one-line summary>
+- Framing 2: <one-line summary>
+- Framing 3: <one-line summary>
+TOP_RISKS: <risk1>; <risk2>; <risk3>
+```
+This allows the orchestrator to present the checkpoint without reading full JSONs.
+
+## Step 4.5: Human Checkpoint (MANDATORY)
+
+After Phase 2 completes, **STOP and present results to the user**. Do NOT proceed to Phase 3 automatically.
+
+### What to present
+Using the strategic_insight agent's return summary (NOT by reading the JSON file), display:
+
+```
+═══ Phase 1+2 Complete — Checkpoint ═══
+
+Company: <company_name>
+Recommendation: <INVEST/WATCH/PASS>
+Confidence: <X/10>
+
+Framings considered:
+- <Framing 1 (selected)>: <summary>
+- <Framing 2>: <summary>
+- <Framing 3>: <summary>
+
+Top risks: <risk1>; <risk2>; <risk3>
+
+All Phase 1+2 outputs saved in dd-local-outputs/<slug>/
+```
+
+### Ask for user decision
+Use **AskUserQuestion** tool with these options:
+1. **Proceed** — Continue to Phase 3 (Review & Critique) + Phase 4 (Report)
+2. **Proceed with feedback** — User provides additional context or focus areas to incorporate into Phase 3+4
+3. **Stop here** — End the analysis. Phase 1+2 outputs are saved on disk for later use.
+
+### If user provides feedback
+Save the feedback to `dd-local-outputs/<slug>/_user_feedback.txt`.
+Pass the feedback file path to Phase 3 agents (review_agent, critique_agent, dd_questions) so they read it and incorporate user direction.
+
 ## Step 5: Phase 3 — Review & Quality (review sequential, then critique + dd_questions parallel)
 
 ### 5a. review_agent (sequential — must complete first)
@@ -728,7 +780,8 @@ Each agent has its OWN context window. The main session context stays lean.
 ## Important Rules
 
 - **Read SYSTEM_PROMPTs from actual .py files** — do NOT hardcode prompts. Use Read tool on `agents/phase1/*.py`, `agents/phase2/*.py`, etc. to get the latest prompts.
-- **Batch Phase 1 in triplets** — 3 agents at a time, 2 batches total.
+- **Phase 1 all parallel** — all 6 agents in a single batch.
+- **Human checkpoint after Phase 2** — NEVER skip. Always present recommendation and wait for user decision.
 - **Disk persistence** — every agent writes JSON to disk. If a crash happens, completed agents don't need re-running.
 - **Cross-pollination** — settled_claims/tensions/gaps MUST be passed to Phase 2 agents via _aggregator.json on disk.
 - **[확인사항]/[추론사항] labeling** — ALL agents must prefix major statements.
