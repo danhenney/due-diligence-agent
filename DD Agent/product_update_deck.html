@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DD Agent — Product & Update Overview</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #0f172a; color: #1e293b; }
+
+  /* ── Slide ────────────────────────────────────────────────── */
+  .slide {
+    width: 100vw;
+    min-height: 100vh;       /* min, not fixed — allows growth */
+    height: 100vh;
+    scroll-snap-align: start;
+    display: flex; flex-direction: column;
+    padding: 44px 72px 36px;
+    position: relative;
+    overflow-y: auto;        /* scroll within slide if needed */
+    overflow-x: hidden;
+  }
+
+  /* Themes */
+  .slide--cover  { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: #f8fafc; }
+  .slide--white  { background: #ffffff; }
+  .slide--light  { background: #f8fafc; }
+  .slide--dark   { background: #1e293b; color: #f1f5f9; }
+  .slide--accent { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: #f8fafc; }
+
+  /* ── Typography ───────────────────────────────────────────── */
+  .slide-num {
+    position: absolute; top: 18px; right: 36px;
+    font-size: 12px; font-weight: 500; opacity: 0.35; letter-spacing: 0.05em;
+  }
+  .slide--cover .slide-num, .slide--dark .slide-num, .slide--accent .slide-num { color: #94a3b8; }
+
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 3px 12px; border-radius: 4px; margin-bottom: 10px;
+  }
+  .tag--blue   { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .tag--green  { background: rgba(16,185,129,0.15); color: #34d399; }
+  .tag--pink   { background: rgba(236,72,153,0.15); color: #f472b6; }
+  .tag--amber  { background: rgba(245,158,11,0.15); color: #fbbf24; }
+
+  h1 { font-size: 40px; font-weight: 900; line-height: 1.15; margin-bottom: 6px; }
+  h2 { font-size: 26px; font-weight: 800; line-height: 1.25; margin-bottom: 4px; }
+  h3 { font-size: 15px; font-weight: 700; line-height: 1.35; margin-bottom: 6px; }
+  .subtitle { font-size: 15px; font-weight: 300; opacity: 0.65; margin-bottom: 18px; line-height: 1.5; }
+
+  /* ── Layout ───────────────────────────────────────────────── */
+  .cols { display: flex; gap: 24px; flex: 1; min-height: 0; }
+  .col  { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 18px 20px 16px; flex: 1; position: relative;
+    overflow: visible;       /* never clip card content */
+  }
+  .slide--dark .card, .slide--accent .card {
+    background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    border-radius: 12px 12px 0 0;
+  }
+  .card--blue::before   { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+  .card--purple::before { background: linear-gradient(90deg, #8b5cf6, #a855f7); }
+  .card--green::before  { background: linear-gradient(90deg, #10b981, #06b6d4); }
+  .card--pink::before   { background: linear-gradient(90deg, #ec4899, #f43f5e); }
+  .card--amber::before  { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+
+  .card-icon { font-size: 22px; margin-bottom: 4px; }
+
+  ul { list-style: none; padding: 0; }
+  ul li {
+    position: relative; padding-left: 14px; margin-bottom: 4px;
+    font-size: 12.5px; line-height: 1.5; font-weight: 400;
+  }
+  ul li::before {
+    content: ''; position: absolute; left: 0; top: 7px;
+    width: 5px; height: 5px; border-radius: 50%; background: #94a3b8;
+  }
+  .slide--dark ul li::before, .slide--accent ul li::before { background: #64748b; }
+
+  .highlight { color: #3b82f6; font-weight: 700; }
+  .slide--dark .highlight, .slide--accent .highlight { color: #60a5fa; }
+  .green { color: #10b981; font-weight: 600; }
+  .pink  { color: #ec4899; font-weight: 600; }
+  .amber { color: #f59e0b; font-weight: 600; }
+  code { font-size: 11px; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 3px; }
+  .slide--dark code { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+  /* ── Flow diagram ─────────────────────────────────────────── */
+  .flow {
+    display: flex; align-items: center; gap: 0;
+    margin: 16px 0 12px; flex-wrap: wrap; justify-content: center;
+  }
+  .flow-node {
+    padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    text-align: center; min-width: 80px; line-height: 1.3;
+  }
+  .flow-arrow { font-size: 18px; color: #94a3b8; margin: 0 3px; }
+  .flow-node--blue   { background: #dbeafe; color: #1e40af; }
+  .flow-node--purple { background: #ede9fe; color: #5b21b6; }
+  .flow-node--amber  { background: #fef3c7; color: #92400e; }
+  .flow-node--green  { background: #d1fae5; color: #065f46; }
+  .flow-node--pink   { background: #fce7f3; color: #9d174d; border: 2px dashed #ec4899; }
+
+  /* ── Comparison table ─────────────────────────────────────── */
+  .cmp-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px;
+  }
+  .cmp-table th {
+    text-align: left; padding: 7px 10px; font-weight: 700; font-size: 11px;
+    border-bottom: 2px solid #e2e8f0; color: #475569; letter-spacing: 0.03em;
+  }
+  .cmp-table td {
+    padding: 6px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top;
+  }
+  .cmp-table tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 99px;
+    font-size: 10px; font-weight: 700; white-space: nowrap;
+  }
+  .badge--green { background: #d1fae5; color: #065f46; }
+  .badge--blue  { background: #dbeafe; color: #1e40af; }
+  .badge--amber { background: #fef3c7; color: #92400e; }
+  .badge--red   { background: #fee2e2; color: #991b1b; }
+
+  /* ── Footer ───────────────────────────────────────────────── */
+  .footer {
+    margin-top: auto; padding-top: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 10px; opacity: 0.3; letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+
+  /* ── Nav dots ─────────────────────────────────────────────── */
+  .nav {
+    position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 100;
+  }
+  .nav a {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); display: block; transition: all 0.2s;
+  }
+  .nav a:hover, .nav a.active { background: #60a5fa; transform: scale(1.4); }
+
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 1200px) {
+    .slide { padding: 32px 40px 28px; }
+    h1 { font-size: 32px; } h2 { font-size: 22px; }
+    .cols { gap: 16px; }
+    ul li { font-size: 12px; }
+  }
+  @media (max-height: 800px) {
+    .slide { padding: 28px 56px 24px; }
+    h2 { font-size: 22px; margin-bottom: 2px; }
+    .subtitle { font-size: 13px; margin-bottom: 10px; }
+    ul li { font-size: 11.5px; margin-bottom: 3px; line-height: 1.4; }
+    .card { padding: 14px 16px 12px; }
+    .card-icon { font-size: 18px; margin-bottom: 2px; }
+    h3 { font-size: 13.5px; margin-bottom: 4px; }
+    .tag { margin-bottom: 6px; }
+    .cmp-table td, .cmp-table th { padding: 5px 8px; }
+    .cmp-table { font-size: 11.5px; }
+  }
+  @media print {
+    html { scroll-snap-type: none; }
+    .slide { page-break-after: always; height: auto; min-height: 100vh; }
+    .nav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Navigation dots -->
+<nav class="nav">
+  <a href="#s1" title="Cover"></a>
+  <a href="#s2" title="Web Version"></a>
+  <a href="#s3" title="Local Version"></a>
+  <a href="#s4" title="Updates"></a>
+  <a href="#s5" title="Local Only"></a>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1 — COVER                                             -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cover" id="s1">
+  <span class="slide-num">01 / 05</span>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <span class="tag tag--blue">PRODUCT OVERVIEW & UPDATE</span>
+    <h1 style="margin-bottom:12px;">DD Agent</h1>
+    <p class="subtitle" style="max-width:680px;">
+      AI 에이전트 15개가 4단계 파이프라인으로 기업 실사를 수행하고,<br>
+      <span class="highlight">매 단계마다 사람의 검토</span>를 거쳐 투자 메모를 완성합니다.
+    </p>
+    <div class="flow">
+      <div class="flow-node flow-node--blue">Phase 1<br><small>리서치 (6)</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--pink">👤 리뷰</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--purple">Phase 2<br><small>종합 (3)</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--pink">👤 리뷰</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--amber">Phase 3<br><small>검토 (3)</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--pink">👤 리뷰</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--green">Phase 4<br><small>보고서</small></div>
+    </div>
+    <p style="font-size: 12px; opacity: 0.35; margin-top: 20px;">
+      웹사이트 버전 (Streamlit Cloud)&nbsp;&nbsp;·&nbsp;&nbsp;로컬 버전 (Claude Code CLI)
+    </p>
+  </div>
+  <div class="footer"><span>Confidential</span><span>2025.03</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2 — WEB VERSION                                       -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--white" id="s2">
+  <span class="slide-num">02 / 05</span>
+  <span class="tag tag--blue">WEB VERSION</span>
+  <h2>웹사이트 버전 — Streamlit Cloud</h2>
+  <p class="subtitle">브라우저에서 기업명 입력 → 15개 에이전트 자동 실행 → 단계별 사람 승인 → 보고서 생성</p>
+
+  <div class="cols">
+    <!-- 왼쪽: 핵심 구조 -->
+    <div class="col">
+      <div class="card card--blue">
+        <h3>🏗️ 인프라</h3>
+        <ul>
+          <li><span class="highlight">Streamlit Cloud</span> 배포 · GitHub 자동 CD</li>
+          <li><span class="highlight">LangGraph StateGraph</span> 오케스트레이션</li>
+          <li>Anthropic API · <code>claude-opus-4-6</code></li>
+          <li><span class="highlight">Supabase</span> — 상태 저장 · 파일 스토리지</li>
+        </ul>
+      </div>
+      <div class="card card--green">
+        <h3>📦 결과물</h3>
+        <ul>
+          <li>최종 산출: <span class="highlight">PDF + PPTX + DOCX</span></li>
+          <li>분석 히스토리 · 다운로드 링크 자동 생성</li>
+          <li>실시간 토큰 비용 추적 (에이전트별)</li>
+          <li>KO / EN 이중 언어 UI</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 파이프라인 흐름 -->
+    <div class="col">
+      <div class="card card--purple" style="flex:1;">
+        <h3>⚙️ 파이프라인 흐름</h3>
+        <table style="width:100%; font-size:12.5px; border-collapse:collapse; margin-top:4px;">
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#3b82f6;">Phase 1</td>
+            <td style="padding:5px 8px;">리서치 에이전트 6개 병렬 (2개씩 배치)</td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 1</td>
+            <td style="padding:4px 8px; color:#9d174d;">에이전트 출력 확인 → 승인/피드백/중단</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#7c3aed;">Phase 2</td>
+            <td style="padding:5px 8px;">종합 분석 — Aggregator · Risk · Strategic</td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 2</td>
+            <td style="padding:4px 8px; color:#9d174d;">종합 결과 검토 → 승인/피드백/중단</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#d97706;">Phase 3</td>
+            <td style="padding:5px 8px;">비평 검토 — Review · Critique · DD Questions</td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 3</td>
+            <td style="padding:4px 8px; color:#9d174d;">최종 검토 결과 확인 → 승인/피드백/중단</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 8px; font-weight:700; color:#059669;">Phase 4</td>
+            <td style="padding:5px 8px;">보고서 구조화 + 작성 → PDF/PPTX/DOCX</td>
+          </tr>
+        </table>
+        <p style="font-size:11px; color:#64748b; margin-top:8px;">
+          Critique 점수 ≥35 & 항목별 ≥7 → Pass · &lt;30 → 재실행 (최대 2회)
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>DD Agent — Product Overview</span><span>02 / 05</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3 — LOCAL VERSION                                     -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--light" id="s3">
+  <span class="slide-num">03 / 05</span>
+  <span class="tag tag--green">LOCAL VERSION</span>
+  <h2>로컬 버전 — Claude Code CLI</h2>
+  <p class="subtitle"><code>/dd-local 회사명</code> 한 줄로 실행 · Claude Code 구독만으로 API 비용 $0 · 동일 4단계 파이프라인</p>
+
+  <div class="cols">
+    <!-- 왼쪽: 핵심 구조 -->
+    <div class="col">
+      <div class="card card--green">
+        <h3>🖥️ 인프라</h3>
+        <ul>
+          <li><span class="highlight">Claude Code CLI</span> 내 Agent 서브에이전트</li>
+          <li>에이전트 14개 · 디스크 기반 데이터 흐름</li>
+          <li>메인 세션 컨텍스트 격리 (윈도우 소모 최소화)</li>
+          <li>WebSearch + Bash(Python) · Tavily · yfinance</li>
+        </ul>
+      </div>
+      <div class="card card--amber">
+        <h3>📂 결과물</h3>
+        <ul>
+          <li>최종 산출: <span class="highlight">report.md + report.pdf</span></li>
+          <li><code>dd-local-outputs/&lt;slug&gt;/</code> 에이전트별 JSON 저장</li>
+          <li>크래시 복구 — 완료 JSON 존재 시 자동 스킵</li>
+          <li><code>--lang Korean</code> · <code>--docs file.pdf</code> 옵션</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 파이프라인 흐름 -->
+    <div class="col">
+      <div class="card card--purple" style="flex:1;">
+        <h3>⚙️ 파이프라인 흐름</h3>
+        <table style="width:100%; font-size:12.5px; border-collapse:collapse; margin-top:4px;">
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#3b82f6;">Phase 1</td>
+            <td style="padding:5px 8px;">리서치 에이전트 6개 <span class="highlight">전부 병렬</span></td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 1</td>
+            <td style="padding:4px 8px; color:#9d174d;">출력 확인 → 승인/피드백/중단</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#7c3aed;">Phase 2</td>
+            <td style="padding:5px 8px;">Aggregator · Risk · Strategic Insight</td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 2</td>
+            <td style="padding:4px 8px; color:#9d174d;">종합 결과 검토 → 승인/피드백/중단</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:5px 8px; font-weight:700; color:#d97706;">Phase 3</td>
+            <td style="padding:5px 8px;">Review · Critique · DD Questions</td>
+          </tr>
+          <tr style="background:#fce7f3;">
+            <td style="padding:4px 8px; font-weight:700; color:#db2777;">👤 리뷰 3</td>
+            <td style="padding:4px 8px; color:#9d174d;">최종 검토 → 승인/피드백/중단</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 8px; font-weight:700; color:#059669;">Phase 4</td>
+            <td style="padding:5px 8px;">6개 섹션 라이터 병렬 → 에디터 조립 → PDF</td>
+          </tr>
+        </table>
+        <p style="font-size:11px; color:#64748b; margin-top:8px;">
+          피드백 → <code>_user_feedback_phaseN.txt</code> 저장 → 다음 단계에 자동 전달
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>DD Agent — Product Overview</span><span>03 / 05</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4 — UPDATES (COMMON)                                  -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--dark" id="s4">
+  <span class="slide-num">04 / 05</span>
+  <span class="tag tag--pink">UPDATE — WEB + LOCAL 공통</span>
+  <h2 style="color:#f8fafc;">업데이트 내역</h2>
+  <p class="subtitle" style="margin-bottom:10px;">웹사이트 버전과 로컬 버전 모두에 적용된 주요 변경사항</p>
+
+  <div class="cols">
+    <div class="col">
+      <!-- HITL -->
+      <div class="card card--pink">
+        <h3>🧑‍💼 Human-in-the-Loop</h3>
+        <ul>
+          <li><span class="pink">3개 체크포인트</span>: Phase 1, 2, 3 완료 후 승인</li>
+          <li>에이전트 출력 <span class="highlight">전체 열람</span> 가능</li>
+          <li>"승인" / "피드백 주고 승인" / "중단" 선택</li>
+          <li>피드백 → 다음 단계 에이전트에 자동 전달</li>
+          <li>자동 승인 옵션으로 논스톱 실행도 가능</li>
+        </ul>
+      </div>
+
+      <!-- Intermediate Results -->
+      <div class="card card--blue">
+        <h3>🔍 중간 결과물 확인 강화</h3>
+        <ul>
+          <li>체크포인트에서 <span class="highlight">단계별 출력</span> 즉시 확인</li>
+          <li>Phase별 그룹핑: 리서치 / 종합 / 검토</li>
+          <li>전용 렌더러: 리스크 매트릭스, 점수표, 추천 배지</li>
+          <li>실시간 진행률 + 토큰 비용 추적</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <!-- Look & Feel -->
+      <div class="card card--purple">
+        <h3>🎨 룩앤필 조정</h3>
+        <ul>
+          <li><span class="highlight">Jian 작성 결과물</span> 기준 룩앤필 조정</li>
+          <li>보고서 포맷: 외부 양식 참고 <span class="highlight">전면 개편</span></li>
+          <li>섹션별 <code>[INSIGHT]</code> 블록 — 핵심 요약 상단 배치</li>
+          <li>용어 평이화: 전문용어에 괄호 설명</li>
+          <li>Investment Framings Table: 복수 시나리오 대비</li>
+          <li>목차 + 교차 참조 자동 삽입</li>
+        </ul>
+      </div>
+
+      <!-- Connecting the Docs -->
+      <div class="card card--green">
+        <h3>🔗 Connecting the Docs</h3>
+        <ul>
+          <li><code>/deep-recon</code> 멀티 에이전트 리서치 패턴 참고</li>
+          <li>Smart Aggregator: <span class="highlight">settled / tensions / gaps</span></li>
+          <li>[DATA] vs [INFERENCE] 라벨링</li>
+          <li>소스 계층: 문서 > 공시 > yfinance > 웹</li>
+        </ul>
+      </div>
+
+      <!-- Agent Prompt -->
+      <div class="card card--amber">
+        <h3>🤖 프롬프트 고도화</h3>
+        <ul>
+          <li><span class="highlight">Marble 작성 결과물</span> 기준 프롬프트 구조 조정</li>
+          <li>전체 프롬프트 <span class="amber">한글 기반</span> 전면 재작성</li>
+          <li>인라인 Python → 별도 <code>.md</code> 파일 분리</li>
+          <li>3+ 소스 교차검증, 블랙리스트 차단 강화</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer" style="color:#94a3b8;"><span>DD Agent — Updates</span><span>04 / 05</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5 — LOCAL ONLY + COMPARISON                           -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--white" id="s5">
+  <span class="slide-num">05 / 05</span>
+  <span class="tag tag--amber">UPDATE — LOCAL 버전 신규</span>
+  <h2>로컬 버전 신규 추가 & 웹 버전 대비 비교</h2>
+  <p class="subtitle">
+    로컬 버전은 Claude Code 구독 플랜만으로 동일 파이프라인을 실행합니다. API 비용이 발생하지 않습니다.
+  </p>
+
+  <div class="cols">
+    <div class="col">
+      <div class="card card--amber">
+        <h3>🆕 로컬 버전 전용 업데이트</h3>
+        <ul>
+          <li><span class="highlight">신규 개발</span>: 14-에이전트 파이프라인 CLI 구현</li>
+          <li><code>/dd-local</code> 스킬로 원커맨드 실행</li>
+          <li><span class="pink">3단계 Human Checkpoint</span>: 인터랙티브 리뷰</li>
+          <li>디스크 기반 컨텍스트 격리 → 윈도우 소모 최소화</li>
+          <li>크래시 시 자동 복구: 완료 JSON 스킵</li>
+          <li>6개 섹션 라이터 병렬 + 에디터 빠른 조립</li>
+          <li><code>--lang Korean</code> / <code>--docs file.pdf</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card card--blue">
+        <h3>📊 웹 vs. 로컬 비교</h3>
+        <table class="cmp-table">
+          <tr>
+            <th>항목</th>
+            <th>웹 버전</th>
+            <th>로컬 버전</th>
+          </tr>
+          <tr>
+            <td><strong>비용</strong></td>
+            <td>분석당 <span class="badge badge--amber">$5–25</span></td>
+            <td><span class="badge badge--green">$0 (구독)</span></td>
+          </tr>
+          <tr>
+            <td><strong>퀄리티</strong></td>
+            <td>Opus 4.6</td>
+            <td>Opus 4.6 <span class="badge badge--green">동등 이상</span></td>
+          </tr>
+          <tr>
+            <td><strong>속도</strong></td>
+            <td>~30–60분</td>
+            <td><span class="badge badge--green">~20–40분</span></td>
+          </tr>
+          <tr>
+            <td><strong>동시 실행</strong></td>
+            <td>최대 2개</td>
+            <td>1개 (CLI)</td>
+          </tr>
+          <tr>
+            <td><strong>접근성</strong></td>
+            <td><span class="badge badge--green">브라우저</span></td>
+            <td><span class="badge badge--blue">CLI 로컬</span></td>
+          </tr>
+          <tr>
+            <td><strong>결과물</strong></td>
+            <td>PDF + PPTX + DOCX</td>
+            <td>PDF + Markdown</td>
+          </tr>
+          <tr>
+            <td><strong>히스토리</strong></td>
+            <td>Supabase DB</td>
+            <td>로컬 디렉토리</td>
+          </tr>
+          <tr>
+            <td><strong>Human Review</strong></td>
+            <td><span class="badge badge--green">UI 버튼</span></td>
+            <td><span class="badge badge--green">CLI 대화형</span></td>
+          </tr>
+          <tr>
+            <td><strong>추천 용도</strong></td>
+            <td>팀 공유, 비개발자</td>
+            <td>개인 분석, 파워유저</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>DD Agent — Updates</span><span>05 / 05</span></div>
+</section>
+
+<script>
+  const dots = document.querySelectorAll('.nav a');
+  const slides = document.querySelectorAll('.slide');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        dots.forEach(d => d.classList.remove('active'));
+        const idx = [...slides].indexOf(e.target);
+        if (dots[idx]) dots[idx].classList.add('active');
+      }
+    });
+  }, { threshold: 0.5 });
+  slides.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

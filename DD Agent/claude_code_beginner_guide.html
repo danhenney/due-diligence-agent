@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 완전 초보 가이드 — 비개발자를 위한 셋업부터 운영까지</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: #0f172a; color: #1e293b; }
+
+  /* ── Slide base ───────────────────────────────────────────── */
+  .slide {
+    width: 100vw; height: 100vh;
+    scroll-snap-align: start;
+    display: flex; flex-direction: column;
+    padding: 56px 80px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Slide themes ─────────────────────────────────────────── */
+  .slide--cover  { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: #f8fafc; }
+  .slide--white  { background: #ffffff; }
+  .slide--light  { background: #f8fafc; }
+  .slide--dark   { background: #1e293b; color: #f1f5f9; }
+  .slide--accent { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: #f8fafc; }
+
+  /* ── Typography ───────────────────────────────────────────── */
+  .slide-num {
+    position: absolute; top: 24px; right: 40px;
+    font-size: 13px; font-weight: 500; opacity: 0.4; letter-spacing: 0.05em;
+  }
+  .slide--cover .slide-num, .slide--dark .slide-num, .slide--accent .slide-num { color: #94a3b8; }
+
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 4px 14px; border-radius: 4px; margin-bottom: 16px;
+  }
+  .tag--blue   { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .tag--green  { background: rgba(16,185,129,0.15); color: #34d399; }
+  .tag--pink   { background: rgba(236,72,153,0.15); color: #f472b6; }
+  .tag--amber  { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .tag--white  { background: rgba(255,255,255,0.12); color: #e2e8f0; }
+  .tag--purple { background: rgba(139,92,246,0.15); color: #a78bfa; }
+
+  h1 { font-size: 42px; font-weight: 900; line-height: 1.2; margin-bottom: 8px; }
+  h2 { font-size: 30px; font-weight: 800; line-height: 1.3; margin-bottom: 6px; }
+  h3 { font-size: 20px; font-weight: 700; line-height: 1.4; margin-bottom: 10px; }
+  .subtitle { font-size: 18px; font-weight: 300; opacity: 0.7; margin-bottom: 32px; line-height: 1.5; }
+
+  /* ── Layout helpers ───────────────────────────────────────── */
+  .cols { display: flex; gap: 32px; flex: 1; min-height: 0; }
+  .col  { flex: 1; display: flex; flex-direction: column; }
+
+  .card {
+    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 28px 28px 24px; flex: 1; position: relative; overflow: hidden;
+  }
+  .slide--dark .card, .slide--accent .card {
+    background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  }
+  .card--blue::before   { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+  .card--purple::before { background: linear-gradient(90deg, #8b5cf6, #a855f7); }
+  .card--green::before  { background: linear-gradient(90deg, #10b981, #06b6d4); }
+  .card--pink::before   { background: linear-gradient(90deg, #ec4899, #f43f5e); }
+  .card--amber::before  { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+
+  .card-icon { font-size: 28px; margin-bottom: 10px; }
+  .card h3 { font-size: 17px; margin-bottom: 8px; }
+
+  ul { list-style: none; padding: 0; }
+  ul li {
+    position: relative; padding-left: 18px; margin-bottom: 7px;
+    font-size: 14px; line-height: 1.55; font-weight: 400;
+  }
+  ul li::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 6px; height: 6px; border-radius: 50%; background: #94a3b8;
+  }
+  .slide--dark ul li::before, .slide--accent ul li::before { background: #64748b; }
+
+  .highlight { color: #3b82f6; font-weight: 700; }
+  .slide--dark .highlight, .slide--accent .highlight { color: #60a5fa; }
+  .green { color: #10b981; font-weight: 600; }
+  .pink  { color: #ec4899; font-weight: 600; }
+  .amber { color: #f59e0b; font-weight: 600; }
+  .purple { color: #8b5cf6; font-weight: 600; }
+
+  /* ── Code blocks ────────────────────────────────────────────── */
+  .code-block {
+    background: #1e293b; border-radius: 10px; padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    line-height: 1.7; color: #e2e8f0; overflow-x: auto;
+    border: 1px solid #334155;
+  }
+  .slide--dark .code-block, .slide--accent .code-block {
+    background: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.08);
+  }
+  .code-block .comment { color: #64748b; }
+  .code-block .key { color: #60a5fa; }
+  .code-block .val { color: #34d399; }
+  .code-block .str { color: #fbbf24; }
+  .code-block .cmd { color: #f472b6; }
+
+  /* ── Step indicators ────────────────────────────────────────── */
+  .step {
+    display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px;
+  }
+  .step-num {
+    flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: #fff;
+  }
+  .step-num--blue   { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .step-num--green  { background: linear-gradient(135deg, #10b981, #06b6d4); }
+  .step-num--purple { background: linear-gradient(135deg, #8b5cf6, #a855f7); }
+  .step-num--amber  { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+  .step-num--pink   { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+  .step-content h3 { font-size: 16px; margin-bottom: 4px; }
+  .step-content p { font-size: 13.5px; line-height: 1.5; color: #64748b; }
+  .slide--dark .step-content p, .slide--accent .step-content p { color: #94a3b8; }
+
+  /* ── Flow diagram ─────────────────────────────────────────── */
+  .flow {
+    display: flex; align-items: center; gap: 0;
+    margin: 20px 0 16px; flex-wrap: wrap; justify-content: center;
+  }
+  .flow-node {
+    padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    text-align: center; min-width: 90px; line-height: 1.3;
+  }
+  .flow-arrow { font-size: 20px; color: #94a3b8; margin: 0 6px; }
+  .flow-node--blue   { background: #dbeafe; color: #1e40af; }
+  .flow-node--purple { background: #ede9fe; color: #5b21b6; }
+  .flow-node--amber  { background: #fef3c7; color: #92400e; }
+  .flow-node--green  { background: #d1fae5; color: #065f46; }
+  .flow-node--pink   { background: #fce7f3; color: #9d174d; }
+  .flow-node--dark   { background: #334155; color: #f1f5f9; }
+
+  /* ── Comparison table ─────────────────────────────────────── */
+  .cmp-table {
+    width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px;
+  }
+  .cmp-table th {
+    text-align: left; padding: 10px 14px; font-weight: 700; font-size: 13px;
+    border-bottom: 2px solid #e2e8f0; color: #475569; letter-spacing: 0.03em;
+  }
+  .cmp-table td {
+    padding: 9px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 13px;
+  }
+  .cmp-table tr:last-child td { border-bottom: none; }
+
+  .slide--dark .cmp-table th { border-bottom-color: #475569; color: #94a3b8; }
+  .slide--dark .cmp-table td { border-bottom-color: #334155; }
+
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 99px;
+    font-size: 11px; font-weight: 700;
+  }
+  .badge--green { background: #d1fae5; color: #065f46; }
+  .badge--blue  { background: #dbeafe; color: #1e40af; }
+  .badge--amber { background: #fef3c7; color: #92400e; }
+  .badge--pink  { background: #fce7f3; color: #9d174d; }
+
+  /* ── Callout box ────────────────────────────────────────────── */
+  .callout {
+    border-radius: 10px; padding: 16px 20px; font-size: 13.5px; line-height: 1.6;
+    margin-top: 12px;
+  }
+  .callout--blue  { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+  .callout--green { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+  .callout--amber { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+  .callout--pink  { background: #fce7f3; color: #9d174d; border-left: 4px solid #ec4899; }
+
+  /* ── Footer ───────────────────────────────────────────────── */
+  .footer {
+    position: absolute; bottom: 20px; left: 80px; right: 80px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; opacity: 0.35; letter-spacing: 0.02em;
+  }
+
+  /* ── Nav dots ─────────────────────────────────────────────── */
+  .nav {
+    position: fixed; right: 20px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 10px; z-index: 100;
+  }
+  .nav a {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(255,255,255,0.25); display: block; transition: all 0.2s;
+  }
+  .nav a:hover, .nav a.active { background: #60a5fa; transform: scale(1.3); }
+
+  /* ── Folder tree ────────────────────────────────────────────── */
+  .tree {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    line-height: 1.8; color: #e2e8f0; padding: 16px 20px;
+    background: rgba(0,0,0,0.25); border-radius: 10px;
+  }
+  .tree .folder { color: #60a5fa; font-weight: 600; }
+  .tree .file { color: #34d399; }
+  .tree .desc { color: #64748b; font-family: 'Noto Sans KR', sans-serif; font-size: 12px; }
+
+  /* ── Responsive ───────────────────────────────────────────── */
+  @media (max-width: 1200px) {
+    .slide { padding: 40px 48px 32px; }
+    h1 { font-size: 34px; } h2 { font-size: 26px; }
+    .cols { gap: 20px; }
+  }
+  @media print {
+    html { scroll-snap-type: none; }
+    .slide { page-break-after: always; height: auto; min-height: 100vh; }
+    .nav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Navigation dots -->
+<nav class="nav">
+  <a href="#s1" title="Cover"></a>
+  <a href="#s2" title="설치"></a>
+  <a href="#s3" title="CLAUDE.md"></a>
+  <a href="#s4" title="Skill"></a>
+  <a href="#s5" title="운영"></a>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 1 — COVER                                             -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--cover" id="s1">
+  <span class="slide-num">01 / 05</span>
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <span class="tag tag--blue">BEGINNER GUIDE</span>
+    <h1 style="font-size:46px; margin-bottom:16px;">Claude Code<br>완전 초보 가이드</h1>
+    <p class="subtitle" style="max-width:720px;">
+      코딩을 몰라도 괜찮습니다.<br>
+      VS Code에서 <span class="highlight">Claude Code를 설치</span>하고,
+      <span class="highlight">나만의 AI 비서를 설정</span>하고,<br>
+      매일 업무에 활용하는 방법까지 — 5페이지로 끝내는 완전 가이드.
+    </p>
+    <div class="flow" style="margin-top:12px;">
+      <div class="flow-node flow-node--blue">1. 설치</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--purple">2. CLAUDE.md<br><small>AI에게 지시서 작성</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--amber">3. Skill.md<br><small>반복 명령 만들기</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node flow-node--green">4. 매일 쓰기<br><small>운영 & 팁</small></div>
+    </div>
+    <p style="font-size:13px; opacity:0.4; margin-top:32px;">
+      대상: 비개발자 · 처음 설치하는 분 · 컨설팅/기획/리서치 업무자
+    </p>
+  </div>
+  <div class="footer"><span>Claude Code Beginner Guide</span><span>2026.03</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 2 — 설치 & 첫 실행                                      -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--white" id="s2">
+  <span class="slide-num">02 / 05</span>
+  <span class="tag tag--blue">STEP 1</span>
+  <h2>설치 & 첫 실행 — 10분이면 끝</h2>
+  <p class="subtitle" style="font-size:15px; margin-bottom:18px;">
+    필요한 것: 컴퓨터, 인터넷, Anthropic 계정(구독). 코딩 경험은 필요 없습니다.
+  </p>
+
+  <div class="cols">
+    <!-- 왼쪽: 설치 단계 -->
+    <div class="col" style="flex:1.2;">
+      <div class="step">
+        <div class="step-num step-num--blue">1</div>
+        <div class="step-content">
+          <h3>VS Code 설치</h3>
+          <p><span class="highlight">code.visualstudio.com</span>에서 다운로드 → 설치. 무료입니다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num step-num--blue">2</div>
+        <div class="step-content">
+          <h3>Node.js 설치</h3>
+          <p><span class="highlight">nodejs.org</span>에서 LTS 버전 다운로드 → 설치. Claude Code 실행에 필요합니다.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num step-num--blue">3</div>
+        <div class="step-content">
+          <h3>Claude Code 확장 설치</h3>
+          <p>VS Code 왼쪽 <span class="highlight">확장(Extensions) 탭</span> → "Claude Code" 검색 → 설치 클릭</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num step-num--blue">4</div>
+        <div class="step-content">
+          <h3>로그인</h3>
+          <p>VS Code 하단의 <span class="highlight">Claude Code 패널</span>이 열리면 Anthropic 계정으로 로그인. 월 $20 구독 필요 (Max 플랜).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num step-num--green">5</div>
+        <div class="step-content">
+          <h3>작업 폴더 열기</h3>
+          <p>VS Code에서 <span class="highlight">파일 → 폴더 열기</span> → 작업할 폴더를 선택. 이 폴더가 Claude의 "작업 공간"이 됩니다.</p>
+        </div>
+      </div>
+
+      <div class="callout callout--blue" style="margin-top:8px;">
+        <strong>핵심 개념:</strong> Claude Code는 <strong>열려있는 폴더</strong> 안에서 파일을 읽고, 만들고, 수정합니다.
+        폴더 = 프로젝트 = Claude의 작업 범위입니다.
+      </div>
+    </div>
+
+    <!-- 오른쪽: 화면 구성 -->
+    <div class="col">
+      <div class="card card--purple" style="padding:24px;">
+        <div class="card-icon">🖥️</div>
+        <h3>VS Code 화면 구성 이해하기</h3>
+        <table class="cmp-table" style="margin-top:8px;">
+          <tr>
+            <td><span class="badge badge--blue">왼쪽</span></td>
+            <td><strong>파일 탐색기</strong> — 폴더와 파일 목록</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--green">가운데</span></td>
+            <td><strong>편집기</strong> — 파일 내용 보기/수정</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--pink">하단/오른쪽</span></td>
+            <td><strong>Claude Code 패널</strong> — AI와 대화하는 곳</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--amber">하단 바</span></td>
+            <td><strong>터미널</strong> — 명령어 입력 (Ctrl+`)</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card card--green" style="margin-top:16px; padding:24px;">
+        <div class="card-icon">💬</div>
+        <h3>첫 대화 — 이렇게 말해보세요</h3>
+        <ul>
+          <li>"이 폴더에 있는 파일들이 뭔지 설명해줘"</li>
+          <li>"report.md 파일을 만들어줘"</li>
+          <li>"이 엑셀 데이터를 분석해서 요약해줘"</li>
+          <li>"매주 월요일 보고서 템플릿을 만들어줘"</li>
+        </ul>
+        <div class="callout callout--green" style="margin-top:8px;">
+          <strong>Tip:</strong> Claude에게 <strong>한국어로 편하게</strong> 말하면 됩니다. 코드 용어를 몰라도 됩니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>Claude Code Beginner Guide</span><span>2026.03</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 3 — CLAUDE.md 작성법                                   -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--dark" id="s3">
+  <span class="slide-num">03 / 05</span>
+  <span class="tag tag--green">STEP 2</span>
+  <h2>CLAUDE.md — AI에게 주는 "업무 지시서"</h2>
+  <p class="subtitle" style="font-size:15px; margin-bottom:18px;">
+    프로젝트 폴더 최상단에 <span class="highlight">CLAUDE.md</span> 파일을 만들면, Claude가 매 대화마다 이 파일을 먼저 읽습니다.<br>
+    = 새 직원에게 주는 <span class="highlight">"우리 팀 업무 매뉴얼"</span>이라고 생각하세요.
+  </p>
+
+  <div class="cols">
+    <!-- 왼쪽: 구조 설명 -->
+    <div class="col">
+      <div class="card card--green" style="padding:24px;">
+        <div class="card-icon">📋</div>
+        <h3>CLAUDE.md에 넣을 내용</h3>
+        <table class="cmp-table">
+          <thead>
+            <tr><th>항목</th><th>설명</th><th>예시</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge--blue">역할</span></td>
+              <td>Claude에게 부여할 역할</td>
+              <td>"너는 투자 리서치 어시스턴트야"</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--green">규칙</span></td>
+              <td>항상 지켜야 할 행동 원칙</td>
+              <td>"항상 한국어로 답변해"</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--amber">맥락</span></td>
+              <td>프로젝트/업무 배경 정보</td>
+              <td>"이 폴더는 주간 보고서용이야"</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--pink">출력 형식</span></td>
+              <td>원하는 결과물 스타일</td>
+              <td>"표 형태로, 마크다운으로"</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="tree">
+          <span class="folder">📁 내-프로젝트-폴더/</span><br>
+          ├── <span class="file">CLAUDE.md</span> <span class="desc">← AI 지시서 (필수!)</span><br>
+          ├── <span class="folder">📁 .claude/</span><br>
+          │&nbsp;&nbsp;&nbsp;├── <span class="folder">📁 commands/</span> <span class="desc">← 스킬 파일 보관</span><br>
+          │&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;├── <span class="file">report.md</span> <span class="desc">← /report 명령</span><br>
+          │&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── <span class="file">summarize.md</span> <span class="desc">← /summarize 명령</span><br>
+          │&nbsp;&nbsp;&nbsp;└── <span class="file">settings.json</span> <span class="desc">← 설정</span><br>
+          ├── <span class="file">data.csv</span><br>
+          └── <span class="file">보고서.md</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 실제 예시 -->
+    <div class="col" style="flex:1.3;">
+      <h3 style="color:#94a3b8; font-size:14px; margin-bottom:10px; letter-spacing:0.05em;">CLAUDE.md 실전 예시 — 그대로 복사해서 쓰세요</h3>
+      <div class="code-block" style="flex:1;">
+<span class="comment"># 프로젝트 개요</span>
+이 폴더는 <span class="val">주간 뉴스 클리핑 리포트</span>를 작성하는 프로젝트입니다.
+
+<span class="comment"># 역할</span>
+너는 <span class="val">미디어 리서치 어시스턴트</span>야.
+기사를 분석하고, 주간 보고서를 작성해.
+
+<span class="comment"># 규칙</span>
+- 항상 <span class="str">한국어</span>로 답변해
+- 보고서는 <span class="str">마크다운(.md)</span> 파일로 만들어
+- 날짜 형식: <span class="str">2026-03-12</span> (YYYY-MM-DD)
+- 기사 출처(URL)를 반드시 포함해
+- 파일명: <span class="str">weekly_report_YYYY-MM-DD.md</span>
+
+<span class="comment"># 보고서 구조</span>
+1. 핵심 요약 (3문장)
+2. 카테고리별 뉴스 (표 형태)
+3. 시사점 & 액션 아이템
+
+<span class="comment"># 참고</span>
+- 주요 매체: 한경, 매경, 블룸버그, 로이터
+- 관심 분야: AI, 핀테크, 헬스케어
+      </div>
+
+      <div class="callout callout--amber" style="margin-top:12px;">
+        <strong>핵심:</strong> CLAUDE.md는 그냥 <strong>텍스트 파일</strong>입니다. VS Code에서 새 파일 → 파일명을 "CLAUDE.md"로 저장하면 끝. 코딩 문법이 아니라 <strong>평소 말하듯이</strong> 쓰면 됩니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>Claude Code Beginner Guide</span><span>2026.03</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 4 — Skill (커스텀 슬래시 명령)                           -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--white" id="s4">
+  <span class="slide-num">04 / 05</span>
+  <span class="tag tag--amber">STEP 3</span>
+  <h2>Skill (.md) — 반복 업무를 "한 단어"로 실행</h2>
+  <p class="subtitle" style="font-size:15px; margin-bottom:18px;">
+    자주 하는 작업을 <span class="highlight">.claude/commands/</span> 폴더에 .md 파일로 저장하면,
+    <span class="highlight">/파일명</span>만 입력해서 실행할 수 있습니다.
+  </p>
+
+  <div class="cols">
+    <!-- 왼쪽: 개념 + 만드는 법 -->
+    <div class="col">
+      <div class="card card--amber" style="padding:24px;">
+        <div class="card-icon">⚡</div>
+        <h3>Skill이 뭔가요?</h3>
+        <ul>
+          <li>CLAUDE.md가 <span class="highlight">"항상 적용되는 규칙"</span>이라면</li>
+          <li>Skill은 <span class="highlight">"버튼 하나로 실행하는 매크로"</span>입니다</li>
+          <li>예: <span class="amber">/report</span> → "이번 주 뉴스를 분석해서 주간 보고서 만들어"</li>
+          <li>예: <span class="amber">/summarize</span> → "첨부 문서를 3줄로 요약해"</li>
+          <li>매번 긴 프롬프트를 반복 입력할 필요 없음!</li>
+        </ul>
+      </div>
+
+      <div class="card card--blue" style="margin-top:16px; padding:24px;">
+        <div class="card-icon">🛠️</div>
+        <h3>만드는 법 (3단계)</h3>
+        <div class="step" style="margin-top:8px;">
+          <div class="step-num step-num--amber">1</div>
+          <div class="step-content">
+            <h3>폴더 만들기</h3>
+            <p>프로젝트 폴더 안에 <span class="highlight">.claude/commands/</span> 폴더 생성</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num step-num--amber">2</div>
+          <div class="step-content">
+            <h3>.md 파일 만들기</h3>
+            <p>그 폴더 안에 원하는 이름으로 .md 파일 생성<br>(예: <span class="highlight">report.md</span>)</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num step-num--amber">3</div>
+          <div class="step-content">
+            <h3>프롬프트 작성</h3>
+            <p>Claude에게 시킬 내용을 <strong>평소 말하듯</strong> 작성</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 실전 예시 2개 -->
+    <div class="col" style="flex:1.3;">
+      <h3 style="color:#475569; font-size:14px; margin-bottom:10px; letter-spacing:0.05em;">📄 .claude/commands/report.md — 주간 보고서 자동 생성</h3>
+      <div class="code-block" style="background:#f8fafc; color:#1e293b; border-color:#e2e8f0;">
+<span class="comment" style="color:#94a3b8;">오늘 날짜 기준으로 이번 주의 주간 뉴스 클리핑 보고서를 만들어줘.</span>
+
+<span style="color:#1e293b;">1. 이 폴더에 있는 기사 파일들을 모두 읽어줘
+2. 카테고리별(AI, 핀테크, 헬스케어)로 분류해
+3. 각 기사의 핵심을 2줄로 요약해
+4. 마지막에 "이번 주 핵심 시사점" 3가지를 뽑아줘
+5. 파일명: weekly_report_</span><span style="color:#3b82f6;">{{날짜}}</span><span style="color:#1e293b;">.md 로 저장해</span>
+
+<span class="comment" style="color:#94a3b8;">보고서 형식은 CLAUDE.md에 정의된 구조를 따라줘.</span>
+      </div>
+
+      <h3 style="color:#475569; font-size:14px; margin:16px 0 10px; letter-spacing:0.05em;">📄 .claude/commands/summarize.md — 문서 요약</h3>
+      <div class="code-block" style="background:#f8fafc; color:#1e293b; border-color:#e2e8f0;">
+<span class="comment" style="color:#94a3b8;">사용자가 지정한 파일을 읽고 요약해줘.</span>
+
+<span style="color:#1e293b;">다음 규칙으로 요약해:
+- 전체 요약: 3문장 이내
+- 핵심 포인트: 불릿 5개 이내
+- 액션 아이템: 할 일 목록으로 정리
+- 원문 길이 대비 요약 비율 표시</span>
+
+<span class="comment" style="color:#94a3b8;">$ARGUMENTS 파일을 요약 대상으로 사용해.</span>
+      </div>
+
+      <div class="callout callout--pink" style="margin-top:12px;">
+        <strong>사용법:</strong> Claude Code 패널에서 <strong>/report</strong> 또는 <strong>/summarize 파일명.pdf</strong> 라고 입력하면 끝!<br>
+        <strong>$ARGUMENTS</strong>는 슬래시 명령 뒤에 붙이는 텍스트가 자동으로 들어가는 변수입니다.
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>Claude Code Beginner Guide</span><span>2026.03</span></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- SLIDE 5 — 매일 쓰는 운영 팁 & 트러블슈팅                        -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<section class="slide slide--accent" id="s5">
+  <span class="slide-num">05 / 05</span>
+  <span class="tag tag--white">DAILY OPERATION</span>
+  <h2>매일 쓰는 운영 팁 & 자주 묻는 질문</h2>
+  <p class="subtitle" style="font-size:15px; margin-bottom:18px;">
+    설치와 설정이 끝났으면, 이제 매일 업무에 활용하는 방법과 알아두면 좋은 팁들입니다.
+  </p>
+
+  <div class="cols">
+    <!-- 왼쪽: 핵심 운영 팁 -->
+    <div class="col">
+      <div class="card card--blue" style="padding:24px;">
+        <div class="card-icon">🎯</div>
+        <h3>핵심 운영 팁 7가지</h3>
+        <ul>
+          <li><span class="highlight">폴더 = 프로젝트</span> — 업무별로 폴더를 나누세요. 폴더마다 다른 CLAUDE.md를 쓸 수 있습니다</li>
+          <li><span class="highlight">구체적으로 지시</span> — "보고서 써줘" 보다 "A4 1장, 표 포함, 한국어, 마크다운"이 훨씬 좋은 결과</li>
+          <li><span class="highlight">/help</span> — 모르겠으면 일단 /help 입력</li>
+          <li><span class="highlight">파일 권한 확인</span> — Claude가 파일을 만들거나 수정할 때 "허용" 팝업이 뜹니다. 내용 확인 후 승인</li>
+          <li><span class="highlight">Ctrl + L</span> — 대화 초기화. 새로운 주제로 넘어갈 때 사용</li>
+          <li><span class="highlight">Esc</span> — Claude가 작업 중일 때 중단하기</li>
+          <li><span class="highlight">대화가 길어지면 새로 시작</span> — 20회 이상 주고받으면 성능이 떨어질 수 있습니다</li>
+        </ul>
+      </div>
+
+      <div class="card card--pink" style="margin-top:16px; padding:24px;">
+        <div class="card-icon">🔑</div>
+        <h3>비용 & 구독</h3>
+        <ul>
+          <li><span class="pink">Claude Max $20/월</span> — 기본. 대부분의 업무에 충분</li>
+          <li><span class="pink">Claude Max $100/월</span> — 헤비 유저. 더 많은 사용량</li>
+          <li>API 방식도 있지만 초보자는 <span class="highlight">구독(Max)</span>이 간편</li>
+          <li>구독은 <span class="highlight">claude.ai/settings</span>에서 관리</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 오른쪽: FAQ + 치트시트 -->
+    <div class="col" style="flex:1.2;">
+      <div class="card card--green" style="padding:24px;">
+        <div class="card-icon">❓</div>
+        <h3>자주 묻는 질문</h3>
+        <table class="cmp-table">
+          <tr>
+            <td style="white-space:nowrap;"><strong>Q. 코딩 몰라도 되나요?</strong></td>
+            <td><span class="green">네.</span> Claude에게 "~해줘"라고 말하면 됩니다. 코드는 Claude가 씁니다.</td>
+          </tr>
+          <tr>
+            <td style="white-space:nowrap;"><strong>Q. 파일이 날아갈 수 있나요?</strong></td>
+            <td>Claude가 파일을 수정/삭제할 때 항상 <span class="highlight">확인 팝업</span>이 뜹니다. 꼭 읽고 승인하세요.</td>
+          </tr>
+          <tr>
+            <td style="white-space:nowrap;"><strong>Q. 인터넷 검색도 되나요?</strong></td>
+            <td><span class="green">네.</span> "~에 대해 웹에서 찾아줘"라고 하면 검색합니다.</td>
+          </tr>
+          <tr>
+            <td style="white-space:nowrap;"><strong>Q. 엑셀/PDF 읽나요?</strong></td>
+            <td><span class="green">네.</span> 폴더에 넣고 "이 파일 읽어줘"라고 하면 됩니다.</td>
+          </tr>
+          <tr>
+            <td style="white-space:nowrap;"><strong>Q. 영어만 되나요?</strong></td>
+            <td><span class="green">아니요.</span> 한국어 완벽 지원. 한국어로 말하면 한국어로 답합니다.</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card card--purple" style="margin-top:16px; padding:24px;">
+        <div class="card-icon">📌</div>
+        <h3>설정 파일 한눈에 보기</h3>
+        <table class="cmp-table">
+          <thead>
+            <tr><th>파일</th><th>위치</th><th>역할</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge--green">CLAUDE.md</span></td>
+              <td>프로젝트 폴더 최상단</td>
+              <td>이 프로젝트 전용 AI 지시서</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--amber">commands/*.md</span></td>
+              <td>.claude/commands/</td>
+              <td>슬래시 명령 (프로젝트 전용)</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--blue">~/.claude/CLAUDE.md</span></td>
+              <td>홈 폴더 > .claude/</td>
+              <td>모든 프로젝트에 적용되는 글로벌 지시</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge--pink">~/.claude/commands/</span></td>
+              <td>홈 폴더 > .claude/</td>
+              <td>어디서든 쓸 수 있는 글로벌 명령</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout callout--green" style="margin-top:10px; background:rgba(16,185,129,0.1); color:#34d399; border-color:#10b981;">
+          <strong>정리:</strong> 프로젝트별 = 폴더 안에 &nbsp;|&nbsp; 전체 공통 = 홈폴더/.claude/ 안에
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span>Claude Code Beginner Guide</span><span>2026.03</span></div>
+</section>
+
+<script>
+  // Highlight active nav dot
+  const dots = document.querySelectorAll('.nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        dots.forEach(d => d.classList.remove('active'));
+        const id = e.target.id;
+        document.querySelector(`.nav a[href="#${id}"]`)?.classList.add('active');
+      }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('.slide').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
