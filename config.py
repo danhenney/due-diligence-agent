@@ -5,11 +5,11 @@ load_dotenv()
 
 # LLM — Anthropic Claude
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-MODEL_NAME = "claude-opus-4-6"
+MODEL_NAME = "claude-sonnet-4-6"
 MAX_TOKENS = 16000
 
 # Hard cost cap per analysis (USD). Pipeline aborts early if exceeded.
-MAX_COST_PER_ANALYSIS = 35.00
+MAX_COST_PER_ANALYSIS = 7.00
 
 # Search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")

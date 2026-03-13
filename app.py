@@ -29,9 +29,9 @@ _ANALYSIS_SEMAPHORE = threading.Semaphore(2)
 
 # ── Token cost tracking ────────────────────────────────────────────────────────
 
-# claude-opus-4-6 pricing (USD per 1M tokens)
-_PRICE_INPUT_PER_M  = 15.00
-_PRICE_OUTPUT_PER_M = 75.00
+# claude-sonnet-4-6 pricing (USD per 1M tokens)
+_PRICE_INPUT_PER_M  = 3.00
+_PRICE_OUTPUT_PER_M = 15.00
 
 # Human-readable labels for each agent key
 _AGENT_LABELS_EN = {
@@ -406,7 +406,7 @@ _UI = {
         "report_lang_label":    "Report Language",
         "docs_label":           "Supporting Documents *(optional)*",
         "docs_help":            "Pitch decks, 10-Ks, annual reports, etc.",
-        "cost_caption":         "Typical cost: **$5 – $25 per analysis** · 15 agents · claude-opus-4-6 · $15/M input · $75/M output",
+        "cost_caption":         "Typical cost: **$1 – $5 per analysis** · 15 agents · claude-sonnet-4-6 · $3/M input · $15/M output",
         "run_btn":              "🔍  Run Due Diligence",
         "pipeline_heading":     "#### Agent Pipeline Flow",
         "pipeline_caption":     "Each phase pauses for **human review** (pink octagons) before proceeding. Orchestrator scores agents, revises weak ones (red dashed).",
@@ -417,7 +417,7 @@ _UI = {
         "methodology_expander": "Methodology & Sources",
         "analyzing":            "## 📊 Analyzing {}…",
         "running_caption":      "Running in the background — you can navigate away and come back at any time.",
-        "api_cost":             "**API cost so far: ${cost:.4f}**  ·  {inp:,} input tokens  ·  {out:,} output tokens  ·  Pricing: $15/M input · $75/M output (claude-opus-4-6)",
+        "api_cost":             "**API cost so far: ${cost:.4f}**  ·  {inp:,} input tokens  ·  {out:,} output tokens  ·  Pricing: $3/M input · $15/M output (claude-sonnet-4-6)",
         "queued_heading":       "## 📊 {} — Queued",
         "queued_caption":       "Two analyses are already running. Yours will start automatically when a slot opens.",
         "queued_info":          "**Your analysis is in the queue.**\n\nThe server allows 2 simultaneous analyses to avoid API rate limits. You're next in line — this page will update automatically when it starts.",
@@ -430,7 +430,7 @@ _UI = {
         "download_btn":         "⬇️  Download PDF Report",
         "analyze_another_btn":  "🔄  Analyze Another Company",
         "token_expander":       "Token Usage & Cost  —  **${:.4f} total**",
-        "token_caption":        "Pricing: claude-opus-4-6 · $15.00 / 1M input tokens · $75.00 / 1M output tokens",
+        "token_caption":        "Pricing: claude-sonnet-4-6 · $3.00 / 1M input tokens · $15.00 / 1M output tokens",
         "no_report":            "No report content was generated.",
         "agent_col":            "Agent",
         "input_tokens_col":     "Input tokens",
@@ -494,7 +494,7 @@ _UI = {
         "report_lang_label":    "보고서 언어",
         "docs_label":           "참고 문서 *(선택)*",
         "docs_help":            "사업계획서, 10-K, 연간보고서 등 PDF",
-        "cost_caption":         "예상 비용: **분석당 $5 – $25** · 에이전트 15개 · claude-opus-4-6 · 입력 $15/M · 출력 $75/M",
+        "cost_caption":         "예상 비용: **분석당 $1 – $5** · 에이전트 15개 · claude-sonnet-4-6 · 입력 $3/M · 출력 $15/M",
         "run_btn":              "🔍  실사 분석 시작",
         "pipeline_heading":     "#### 에이전트 파이프라인",
         "pipeline_caption":     "매 단계마다 **사람의 리뷰**(분홍 팔각형)를 거친 후 다음 단계로 진행. 오케스트레이터가 점수 평가 후 약한 에이전트 재실행(빨간 점선).",
@@ -505,7 +505,7 @@ _UI = {
         "methodology_expander": "방법론 & 소스",
         "analyzing":            "## 📊 {} 분석 중…",
         "running_caption":      "백그라운드에서 실행 중 — 페이지를 벗어났다가 언제든 돌아올 수 있습니다.",
-        "api_cost":             "**현재 API 비용: ${cost:.4f}**  ·  입력 토큰 {inp:,}개  ·  출력 토큰 {out:,}개  ·  가격: 입력 $15/M · 출력 $75/M (claude-opus-4-6)",
+        "api_cost":             "**현재 API 비용: ${cost:.4f}**  ·  입력 토큰 {inp:,}개  ·  출력 토큰 {out:,}개  ·  가격: 입력 $3/M · 출력 $15/M (claude-sonnet-4-6)",
         "queued_heading":       "## 📊 {} — 대기 중",
         "queued_caption":       "현재 2개의 분석이 실행 중입니다. 슬롯이 열리면 자동으로 시작됩니다.",
         "queued_info":          "**분석이 대기열에 있습니다.**\n\nAPI 속도 제한을 방지하기 위해 서버는 최대 2개의 동시 분석을 허용합니다. 다음 순서입니다 — 시작되면 이 페이지가 자동으로 업데이트됩니다.",
@@ -518,7 +518,7 @@ _UI = {
         "download_btn":         "⬇️  PDF 보고서 다운로드",
         "analyze_another_btn":  "🔄  다른 기업 분석",
         "token_expander":       "토큰 사용량 & 비용  —  **총 ${:.4f}**",
-        "token_caption":        "가격: claude-opus-4-6 · 입력 $15.00 / 1M 토큰 · 출력 $75.00 / 1M 토큰",
+        "token_caption":        "가격: claude-sonnet-4-6 · 입력 $3.00 / 1M 토큰 · 출력 $15.00 / 1M 토큰",
         "no_report":            "생성된 보고서 내용이 없습니다.",
         "agent_col":            "에이전트",
         "input_tokens_col":     "입력 토큰",
