@@ -20,3 +20,30 @@ docs_cache/
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE / editor
+.obsidian/
+.claude/
+
+# Temp / scratch files
+*.pdf
+*.csv
+*.xlsx
+*.base
+*.ttf
+nul
+=*
+feedback.txt
+pdf_output.txt
+_test_claude.txt
+_dart_extract.py
+read_pdfs.py
+search_upstage.py
+search_*.json
+search_*.txt
+*_extracted.txt
+*_text_full.txt
+
+# Local folders not for repo
+Upstage/
+fonts/
