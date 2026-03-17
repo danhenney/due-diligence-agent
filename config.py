@@ -30,6 +30,12 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 # Optional — USPTO patent search (free key at search.patentsview.org/docs)
 PATENTSVIEW_API_KEY = os.getenv("PATENTSVIEW_API_KEY", "")
 
+# Optional — KIPRIS Korean patent search (free key at plus.kipris.or.kr)
+KIPRIS_API_KEY = os.getenv("KIPRIS_API_KEY", "")
+
+# Optional — KOSIS Korean national statistics (free key at kosis.kr/openapi)
+KOSIS_API_KEY = os.getenv("KOSIS_API_KEY", "")
+
 # Persistence
 CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./checkpoints.db")
 

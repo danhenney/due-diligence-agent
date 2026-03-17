@@ -9,7 +9,8 @@ class DueDiligenceState(TypedDict):
     # ── Input ─────────────────────────────────────────────────────────────
     company_name: str
     company_url: str | None
-    uploaded_docs: list[str]          # local file paths to PDFs
+    uploaded_docs: list[str]          # local file paths to PDFs/Excel
+    preprocessed_docs: dict | None    # {agent_name: [preprocessed_md_paths]}
     is_public: bool | None            # True = public, False = private, None = unknown
     ticker: str | None                # resolved ticker symbol (public companies only)
 

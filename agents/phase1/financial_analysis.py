@@ -15,9 +15,10 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     company = state["company_name"]
     url = state.get("company_url") or ""
     docs = state.get("uploaded_docs") or []
+    preprocessed = (state.get("preprocessed_docs") or {}).get("financial_analysis")
     is_public = state.get("is_public", True)
 
-    doc_note = build_doc_instructions(docs, agent_focus="financial")
+    doc_note = build_doc_instructions(docs, agent_focus="financial", preprocessed_md_paths=preprocessed)
 
     if is_public is False:
         data_instructions = (

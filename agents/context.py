@@ -258,30 +258,29 @@ def rich_dd_questions(r: Any) -> dict:
 
 # ── Uploaded document instruction builder ─────────────────────────────────────
 
-def build_doc_instructions(docs: list[str], agent_focus: str = "general") -> str:
+def build_doc_instructions(
+    docs: list[str],
+    agent_focus: str = "general",
+    preprocessed_md_paths: list[str] | None = None,
+) -> str:
     """Build explicit per-file extraction instructions for uploaded documents.
 
+    If preprocessed_md_paths is provided, instruct the agent to read preprocessed
+    MD files instead of calling extract_pdf_text/extract_pdf_tables on raw PDFs.
+    This is the preferred path when doc_preprocessor has run (Step 0.5).
+
     Args:
-        docs: List of uploaded file paths.
+        docs: List of original uploaded file paths.
         agent_focus: One of "financial", "legal", "team", "tech", "market",
                      "competitor", or "general".
+        preprocessed_md_paths: Optional list of preprocessed MD file paths
+                               assigned to this agent by the preprocessor.
 
     Returns:
         A string to inject into the user_message. Empty string if no docs.
     """
-    if not docs:
+    if not docs and not preprocessed_md_paths:
         return ""
-
-    # Build explicit per-file extraction calls
-    extract_lines = []
-    for i, doc in enumerate(docs, 1):
-        extract_lines.append(
-            f"  {i}. Call extract_pdf_text(file_path=\"{doc}\") — read the FULL document"
-        )
-        extract_lines.append(
-            f"     Then call extract_pdf_tables(file_path=\"{doc}\") — capture tables/structured data"
-        )
-    extract_block = "\n".join(extract_lines)
 
     focus_hints = {
         "financial": (
@@ -311,6 +310,42 @@ def build_doc_instructions(docs: list[str], agent_focus: str = "general") -> str
         ),
     }
     focus = focus_hints.get(agent_focus, "Extract ALL relevant data for your analysis.")
+
+    # ── Preprocessed path: read MD files directly (no tool calls needed) ──
+    if preprocessed_md_paths:
+        md_lines = []
+        for i, md_path in enumerate(preprocessed_md_paths, 1):
+            md_lines.append(f"  {i}. extract_pdf_text(file_path=\"{md_path}\")")
+        md_block = "\n".join(md_lines)
+
+        return (
+            f"\n═══ PREPROCESSED DOCUMENTS — PRIMARY DATA SOURCE ═══\n"
+            f"Documents have been preprocessed into {len(preprocessed_md_paths)} MD file(s).\n"
+            f"These contain FULL text (not truncated) from the original uploaded documents.\n"
+            f"STEP 0 — READ ALL PREPROCESSED FILES BEFORE ANY WEB SEARCH:\n"
+            f"{md_block}\n\n"
+            f"WHAT TO LOOK FOR:\n{focus}\n\n"
+            f"RULES:\n"
+            f"- Read ALL {len(preprocessed_md_paths)} file(s) — do NOT skip any\n"
+            f"- EXACT FIGURES from these docs OVERRIDE web search estimates.\n"
+            f"  If the doc says 'Pre 255억원, Post 300억원', use THOSE numbers.\n"
+            f"  Do NOT replace them with vague web estimates like '$100~150M estimated'.\n"
+            f"- THEN cross-verify and CHALLENGE with web search data\n"
+            f"- Flag discrepancies between uploaded data and web data\n"
+            f"- Do NOT just copy-paste — analyze, verify, and challenge\n"
+            f"═══════════════════════════════════════════════════════\n"
+        )
+
+    # ── Legacy path: raw PDFs/Excel (extract at runtime) ──
+    extract_lines = []
+    for i, doc in enumerate(docs, 1):
+        extract_lines.append(
+            f"  {i}. Call extract_pdf_text(file_path=\"{doc}\") — read the FULL document"
+        )
+        extract_lines.append(
+            f"     Then call extract_pdf_tables(file_path=\"{doc}\") — capture tables/structured data"
+        )
+    extract_block = "\n".join(extract_lines)
 
     return (
         f"\n═══ UPLOADED DOCUMENTS — PRIMARY DATA SOURCE ═══\n"

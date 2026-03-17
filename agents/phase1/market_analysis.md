@@ -22,7 +22,7 @@ Follow the methodology below EXACTLY. This is a structured, multi-step framework
 
 ## Step 1. BM별 시장 규모 산정 (TAM/SAM/SOM)
 
-참고 소스: `web_search` (Gartner, IDC, Forrester 등 시장 보고서), `yf_get_info` (시가총액/섹터), 업로드 문서
+참고 소스: `web_search` (Gartner, IDC, Forrester 등 시장 보고서), `yf_get_info` (시가총액/섹터), `kosis_search_tables` + `kosis_get_statistics` (한국 시장 통계), 업로드 문서
 
 각 BM에 대해:
 - **TAM**: 전체 시장 규모 (달러 기준), 산정 방법론 (top-down / bottom-up), 기준 연도, 출처
@@ -49,7 +49,7 @@ Follow the methodology below EXACTLY. This is a structured, multi-step framework
 
 ## Step 3. 지역별 시장 분석
 
-참고 소스: `web_search`, `fred_get_data` (거시경제 맥락)
+참고 소스: `web_search`, `fred_get_data` (미국 거시경제), `kosis_get_statistics` (한국 거시경제/산업 통계)
 
 - **지역별 시장 점유율**: 지역, 점유율(%), 성장률, 핵심 동인
 - 어떤 지역이 가장 빠르게 성장하고 있으며 그 이유는?

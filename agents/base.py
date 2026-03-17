@@ -150,7 +150,7 @@ def run_agent(
         if hierarchy_parts:
             rules.append(
                 "SOURCE HIERARCHY: " + " / ".join(hierarchy_parts)
-                + " > uploaded documents (exact figures) > yfinance > web search. "
+                + " > uploaded documents (exact figures) > public data (KOSIS/KIPRIS/FRED) > yfinance > web search. "
                 "Official filings always win on conflict."
             )
 
@@ -183,10 +183,13 @@ def run_agent(
             "Use actual numbers, not vague summaries. Deliver investor-focused analysis."
         )
         rules.append(
-            "[DATA]/[INFERENCE] LABELING: Prefix every major statement with "
-            "[DATA] (directly from a source — tool result, document, filing) or "
-            "[INFERENCE] (your own analysis/interpretation). "
-            "This helps downstream agents distinguish verified facts from speculation."
+            "[DATA]/[INFERENCE]/[UNVERIFIED] LABELING: Prefix every major statement with "
+            "[DATA: <specific source>] (directly from a source — tool result, document, filing), "
+            "[INFERENCE] (your own analysis/interpretation), or "
+            "[UNVERIFIED] (claim without verified source). "
+            "This helps downstream agents distinguish verified facts from speculation. "
+            "NOTE: The report writer will convert these to numbered footnotes (¹²³) with "
+            "a source verification table in the appendix."
         )
 
         system_prompt = "\n".join(rules) + "\n\n" + system_prompt

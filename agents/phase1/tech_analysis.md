@@ -25,7 +25,7 @@ Follow the methodology below EXACTLY. This is a structured, multi-step framework
 
 ## Step 2. IP 및 특허 포트폴리오
 
-참고 소스: `patent_search` (USPTO PatentsView), `web_search` (특허 전략, KIPRIS)
+참고 소스: `patent_search` (USPTO PatentsView), `kipris_search_patents` + `kipris_search_by_applicant` (한국 특허/KIPRIS), `web_search` (특허 전략)
 
 - **특허 포트폴리오**: 총 건수, 핵심 특허, 출원 중 특허, 지역별 커버리지
 - **IP 전략**: 공격적(라이선스 수익) vs 방어적(경쟁사 차단) vs 혼합

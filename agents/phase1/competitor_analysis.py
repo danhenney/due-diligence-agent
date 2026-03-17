@@ -14,6 +14,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
     company = state["company_name"]
     url = state.get("company_url") or ""
     docs = state.get("uploaded_docs") or []
+    preprocessed = (state.get("preprocessed_docs") or {}).get("competitor_analysis")
     is_public = state.get("is_public", True)
 
     if is_public is False:
@@ -30,7 +31,7 @@ def run(state: DueDiligenceState, revision_brief: str | None = None) -> dict:
             "Use Google Trends to compare brand interest levels.\n"
         )
 
-    doc_note = build_doc_instructions(docs, agent_focus="competitor")
+    doc_note = build_doc_instructions(docs, agent_focus="competitor", preprocessed_md_paths=preprocessed)
 
     user_message = (
         f"Company: {company}\nURL: {url}{doc_note}\n\n"

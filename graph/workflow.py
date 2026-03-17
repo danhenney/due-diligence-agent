@@ -20,6 +20,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from graph.state import DueDiligenceState
 from config import CHECKPOINT_DB_PATH, MODE_REGISTRY
+from tools.doc_preprocessor import preprocess_documents
 
 # ── Import all agents ─────────────────────────────────────────────────────────
 from agents.phase1 import (
@@ -166,12 +167,31 @@ def input_processor(state: DueDiligenceState) -> dict:
         errors.append(f"Invalid mode '{mode}'. Valid: {list(MODE_REGISTRY.keys())}")
         mode = "due-diligence"
 
+    # ── Document preprocessing (Step 0.5) ──────────────────────────────────
+    # Convert uploaded PDFs/Excel to MD before Phase 1 agents run.
+    # This ensures agents read FULL content, not just first ~6 pages.
+    preprocessed_docs = None
+    uploaded = state.get("uploaded_docs") or []
+    if uploaded:
+        try:
+            company_slug = _re.sub(r"[^\w\-]", "_", state.get("company_name", "unknown").strip())[:60]
+            preprocess_dir = _os.path.join("outputs", company_slug, "_preprocessed")
+            preprocessed_docs = preprocess_documents(uploaded, preprocess_dir)
+            log.info("[preprocess] Converted %d docs → %d MD files across %d agents",
+                     len(uploaded),
+                     sum(len(v) for v in preprocessed_docs.values()),
+                     sum(1 for v in preprocessed_docs.values() if v))
+        except Exception as exc:
+            log.warning("[preprocess] Document preprocessing failed, falling back to raw docs: %s", exc)
+            errors.append(f"Document preprocessing failed: {exc}")
+
     return {
         "current_phase": "phase1",
         "errors": errors,
         "is_public": is_public,
         "ticker": ticker,
         "mode": mode,
+        "preprocessed_docs": preprocessed_docs,
         "feedback_loop_count": 0,
         "weak_sections": [],
     }

@@ -6,6 +6,7 @@ import threading
 
 from tools import tavily_tools, edgar_tools, dart_tools, pdf_tools, yfinance_tools
 from tools import pytrends_tools, fred_tools, github_tools, patents_tools
+from tools import kipris_tools, kosis_tools
 
 # ── Per-run tool result cache ────────────────────────────────────────────────
 # Keyed on (tool_name, frozen_input). Shared across threads within a single
@@ -52,6 +53,8 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             yfinance_tools.YF_GET_INFO_TOOL,
             pytrends_tools.GOOGLE_TRENDS_INTEREST_TOOL,
             pytrends_tools.GOOGLE_TRENDS_RELATED_TOOL,
+            kosis_tools.KOSIS_SEARCH_TABLES_TOOL,
+            kosis_tools.KOSIS_GET_STATISTICS_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
@@ -79,6 +82,8 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             github_tools.GITHUB_SEARCH_REPOS_TOOL,
             github_tools.GITHUB_REPO_STATS_TOOL,
             patents_tools.SEARCH_PATENTS_TOOL,
+            kipris_tools.KIPRIS_SEARCH_PATENTS_TOOL,
+            kipris_tools.KIPRIS_SEARCH_BY_APPLICANT_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
@@ -163,6 +168,10 @@ _TOOL_DISPATCH: dict[str, object] = {
     "github_repo_stats":       github_tools,
     "search_patents":          patents_tools,
     "get_patent_detail":       patents_tools,
+    "kipris_search_patents":       kipris_tools,
+    "kipris_search_by_applicant":  kipris_tools,
+    "kosis_get_statistics":        kosis_tools,
+    "kosis_search_tables":         kosis_tools,
 }
 
 
@@ -196,6 +205,10 @@ def _fallback_for(tool_name: str) -> str:
         "github_repo_stats":        "web_search",
         "search_patents":           "web_search",
         "get_patent_detail":        "web_search",
+        "kipris_search_patents":        "web_search",
+        "kipris_search_by_applicant":   "web_search",
+        "kosis_get_statistics":         "web_search",
+        "kosis_search_tables":          "web_search",
     }
     return _fallbacks.get(tool_name, "web_search")
 
