@@ -397,6 +397,11 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         update_job(job_id, {"status": "error", "error": str(exc)})
 
     finally:
+        # Clean up custom mode registration
+        _mode = initial_state.get("mode", "")
+        if _mode.startswith("custom-"):
+            from config import unregister_custom_mode
+            unregister_custom_mode(_mode)
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 import streamlit as st
@@ -1450,9 +1455,9 @@ if st.session_state.phase == "form":
         )
         analysis_mode = st.selectbox(
             "Analysis Mode",
-            options=["due-diligence", "industry-research", "deep-dive", "benchmark"],
+            options=["due-diligence", "industry-research", "deep-dive", "benchmark", "custom"],
             index=0,
-            help="due-diligence: full investment DD | industry-research: industry structure | deep-dive: non-investment analysis | benchmark: head-to-head comparison",
+            help="due-diligence: full investment DD | industry-research: industry structure | deep-dive: non-investment analysis | benchmark: head-to-head comparison | custom: pick your own agents",
             key="analysis_mode",
         )
         vs_company_input = ""
@@ -1462,6 +1467,38 @@ if st.session_state.phase == "form":
                 placeholder="e.g. OpenAI, Samsung",
                 help="Company to compare against (required for benchmark mode).",
                 key="vs_company",
+            )
+        if analysis_mode == "custom":
+            st.markdown("##### Agent Selection")
+            st.caption("Choose which agents to include in the analysis pipeline.")
+            _c_p1, _c_p2 = st.columns(2)
+            with _c_p1:
+                st.markdown("**Phase 1 — Research**")
+                _custom_market = st.checkbox("Market Analysis", value=True, key="c_market_analysis")
+                _custom_competitor = st.checkbox("Competitor Analysis", value=True, key="c_competitor_analysis")
+                _custom_financial = st.checkbox("Financial Analysis", value=True, key="c_financial_analysis")
+                _custom_tech = st.checkbox("Tech Analysis", value=True, key="c_tech_analysis")
+                _custom_legal = st.checkbox("Legal & Regulatory", value=True, key="c_legal_regulatory")
+                _custom_team = st.checkbox("Team Analysis", value=True, key="c_team_analysis")
+            with _c_p2:
+                st.markdown("**Phase 2 — Synthesis**")
+                _custom_ra = st.checkbox("R&A Synthesis", value=True, key="c_ra_synthesis")
+                _custom_risk = st.checkbox("Risk Assessment", value=True, key="c_risk_assessment")
+                _custom_si = st.checkbox("Strategic Insight", value=False, key="c_strategic_insight",
+                                         help="Requires R&A Synthesis + Risk Assessment")
+                _custom_industry = st.checkbox("Industry Synthesis", value=False, key="c_industry_synthesis")
+                _custom_benchmark = st.checkbox("Benchmark Synthesis", value=False, key="c_benchmark_synthesis")
+                st.markdown("**Phase 3 — Review**")
+                _custom_review = st.checkbox("Review Agent", value=True, key="c_review_agent")
+                _custom_critique = st.checkbox("Critique Agent", value=True, key="c_critique_agent")
+                _custom_ddq = st.checkbox("DD Questions", value=True, key="c_dd_questions")
+            _custom_feedback = st.checkbox(
+                "Enable Feedback Loop", value=False, key="c_feedback_loop",
+                help="Requires Critique Agent. Re-runs weak agents if quality is low.",
+            )
+            _custom_rec = st.checkbox(
+                "Include Recommendation (INVEST/WATCH/PASS)", value=False, key="c_recommendation",
+                help="Requires Strategic Insight.",
             )
         uploaded_files = st.file_uploader(
             t("docs_label"),
@@ -1581,6 +1618,52 @@ if st.session_state.phase == "form":
         _ct_map = {"Auto-detect": None, "Public": True, "Private": False}
         is_public_value = _ct_map.get(company_type)
 
+        # ── Custom mode registration ─────────────────────────────────────────
+        effective_mode = st.session_state.get("analysis_mode", "due-diligence")
+        custom_mode_key: str | None = None
+        if effective_mode == "custom":
+            from config import register_custom_mode, unregister_custom_mode
+            _p1_map = {
+                "market_analysis": st.session_state.get("c_market_analysis", False),
+                "competitor_analysis": st.session_state.get("c_competitor_analysis", False),
+                "financial_analysis": st.session_state.get("c_financial_analysis", False),
+                "tech_analysis": st.session_state.get("c_tech_analysis", False),
+                "legal_regulatory": st.session_state.get("c_legal_regulatory", False),
+                "team_analysis": st.session_state.get("c_team_analysis", False),
+            }
+            _p2_map = {
+                "ra_synthesis": st.session_state.get("c_ra_synthesis", False),
+                "risk_assessment": st.session_state.get("c_risk_assessment", False),
+                "strategic_insight": st.session_state.get("c_strategic_insight", False),
+                "industry_synthesis": st.session_state.get("c_industry_synthesis", False),
+                "benchmark_synthesis": st.session_state.get("c_benchmark_synthesis", False),
+            }
+            _p3_map = {
+                "review_agent": st.session_state.get("c_review_agent", False),
+                "critique_agent": st.session_state.get("c_critique_agent", False),
+                "dd_questions": st.session_state.get("c_dd_questions", False),
+            }
+            p1 = [k for k, v in _p1_map.items() if v]
+            p2_par = [k for k, v in _p2_map.items() if v and k != "strategic_insight"]
+            p2_seq = ["strategic_insight"] if _p2_map.get("strategic_insight") else []
+            p3 = [k for k, v in _p3_map.items() if v]
+            if not p3:
+                p3 = ["critique_agent"]
+
+            custom_mode_key = f"custom-{job_id}"
+            try:
+                register_custom_mode(
+                    phase1=p1, phase2_parallel=p2_par, phase2_sequential=p2_seq,
+                    phase3=p3,
+                    feedback_loop=st.session_state.get("c_feedback_loop", False),
+                    recommendation=st.session_state.get("c_recommendation", False),
+                    mode_key=custom_mode_key,
+                )
+                effective_mode = custom_mode_key
+            except ValueError as e:
+                st.error(f"Invalid custom mode configuration: {e}")
+                st.stop()
+
         initial_state = {
             "company_name": company.strip(),
             "company_url": url.strip(),
@@ -1589,7 +1672,7 @@ if st.session_state.phase == "form":
             "ticker": None,
             "language": lang_value,
             # Mode
-            "mode": st.session_state.get("analysis_mode", "due-diligence"),
+            "mode": effective_mode,
             "vs_company": st.session_state.get("vs_company") or None,
             # Phase 1
             "market_analysis": None,

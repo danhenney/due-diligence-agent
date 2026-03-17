@@ -13,7 +13,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-from config import REPORTS_DIR, VALID_MODES, validate_config
+from config import REPORTS_DIR, VALID_MODES, validate_config, register_custom_mode
 
 app = typer.Typer(
     name="due-diligence",
@@ -35,6 +35,12 @@ def main(
     url: str | None = typer.Option(None, "--url", "-u", help="Company website URL."),
     mode: str = typer.Option("due-diligence", "--mode", "-m", help=f"Analysis mode: {', '.join(VALID_MODES)}"),
     vs: str | None = typer.Option(None, "--vs", help="Benchmark comparison target (benchmark mode only)."),
+    agents: str | None = typer.Option(
+        None, "--agents",
+        help="Custom mode: comma-separated agent names (e.g. market_analysis,financial_analysis,risk_assessment,critique_agent)."
+    ),
+    feedback_loop: bool = typer.Option(False, "--feedback-loop", help="Custom mode: enable feedback loop (requires critique_agent)."),
+    recommendation: bool = typer.Option(False, "--recommendation", help="Custom mode: include recommendation (requires strategic_insight)."),
     docs: list[str] = typer.Option(
         [], "--docs", "-d", help="Path(s) to uploaded PDF documents.", show_default=False
     ),
@@ -46,8 +52,28 @@ def main(
     ),
 ):
     """Run full multi-agent due diligence on a company."""
+    # ── Custom mode from --agents ─────────────────────────────────────────
+    if agents:
+        mode = "custom"
+        from config import VALID_PHASE1_AGENTS, VALID_PHASE2_AGENTS, VALID_PHASE3_AGENTS
+        agent_list = [a.strip() for a in agents.split(",") if a.strip()]
+        p1 = [a for a in agent_list if a in VALID_PHASE1_AGENTS]
+        p2 = [a for a in agent_list if a in VALID_PHASE2_AGENTS and a != "strategic_insight"]
+        p2_seq = [a for a in agent_list if a == "strategic_insight"]
+        p3 = [a for a in agent_list if a in VALID_PHASE3_AGENTS]
+        if not p3:
+            p3 = ["critique_agent"]  # default quality check
+        try:
+            register_custom_mode(
+                phase1=p1, phase2_parallel=p2, phase2_sequential=p2_seq,
+                phase3=p3, feedback_loop=feedback_loop, recommendation=recommendation,
+            )
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+
     # ── Mode validation ───────────────────────────────────────────────────
-    if mode not in VALID_MODES:
+    if mode not in VALID_MODES and not mode.startswith("custom"):
         console.print(f"[red]Error:[/red] Invalid mode '{mode}'. Valid: {', '.join(VALID_MODES)}")
         raise typer.Exit(code=1)
     if mode == "benchmark" and not vs:

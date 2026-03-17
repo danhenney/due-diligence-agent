@@ -47,6 +47,7 @@ _REPORT_TYPES = {
     "industry-research": "Industry Research Report",
     "deep-dive": "Deep Dive Analysis Report",
     "benchmark": "Benchmark Comparison Report",
+    "custom": "Custom Analysis Report",
 }
 
 _MODE_INSTRUCTIONS = {
@@ -73,6 +74,12 @@ _MODE_INSTRUCTIONS = {
         "Write the complete Benchmark Comparison Report. Focus on objective, data-driven "
         "comparison between the two companies across all dimensions. "
         "Use comparison tables extensively. Do NOT include investment recommendations. "
+        "Follow the report structure provided."
+    ),
+    "custom": (
+        "Write the complete analysis report based on the available agent outputs. "
+        "Be thorough and detailed — include all specific numbers and evidence. "
+        "Adapt the report structure to the agents that were included in this run. "
         "Follow the report structure provided."
     ),
 }
@@ -147,7 +154,9 @@ def _collect_all_sources(state: DueDiligenceState) -> list[dict]:
 def run(state: DueDiligenceState) -> dict:
     mode = state.get("mode", "due-diligence")
     cfg = MODE_REGISTRY[mode]
-    report_type = _REPORT_TYPES.get(mode, "Analysis Report")
+    # For thread-safe custom keys like "custom-abc123", look up "custom" fallback
+    lookup_mode = "custom" if mode.startswith("custom") else mode
+    report_type = _REPORT_TYPES.get(lookup_mode, "Analysis Report")
 
     full_package = compact(_build_mode_context(state))
 
@@ -187,7 +196,7 @@ def run(state: DueDiligenceState) -> dict:
         vs = state.get("vs_company") or "industry average"
         benchmark_note = f"Benchmark Target: {vs}\n\n"
 
-    write_instructions = _MODE_INSTRUCTIONS.get(mode, _MODE_INSTRUCTIONS["due-diligence"])
+    write_instructions = _MODE_INSTRUCTIONS.get(lookup_mode, _MODE_INSTRUCTIONS["custom"])
 
     user_message = (
         f"Company: {state['company_name']}\n"

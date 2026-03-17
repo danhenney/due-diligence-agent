@@ -43,6 +43,7 @@ _REPORT_TYPES = {
     "industry-research": ("Industry Research Report", 3, "10-15 pages"),
     "deep-dive": ("Deep Dive Analysis Report", 4, "15-20 pages"),
     "benchmark": ("Benchmark Comparison Report", 3, "10-15 pages"),
+    "custom": ("Custom Analysis Report", 4, "15-25 pages"),
 }
 
 
@@ -82,8 +83,10 @@ def _build_mode_context(state: DueDiligenceState) -> dict:
 def run(state: DueDiligenceState) -> dict:
     mode = state.get("mode", "due-diligence")
     cfg = MODE_REGISTRY[mode]
+    # For thread-safe custom keys like "custom-abc123", look up "custom" fallback
+    lookup_mode = "custom" if mode.startswith("custom") else mode
     report_type, n_sections, page_target = _REPORT_TYPES.get(
-        mode, ("Analysis Report", cfg["phase4_sections"], "15-20 pages")
+        lookup_mode, ("Analysis Report", cfg["phase4_sections"], "15-20 pages")
     )
 
     all_context = compact(_build_mode_context(state))

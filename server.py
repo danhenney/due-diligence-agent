@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
 import pdf_report
-from config import validate_config
+from config import validate_config, register_custom_mode, unregister_custom_mode
 from graph.workflow import build_graph
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -47,6 +47,8 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
     """Background thread: runs the graph and posts SSE events to the queue."""
     job = _jobs[job_id]
     q: queue.Queue = job["queue"]
+    # Track custom mode key for cleanup
+    custom_mode_key: str | None = job.get("custom_mode_key")
 
     try:
         graph = build_graph(mode=mode, use_checkpointing=False)
@@ -123,6 +125,9 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
     finally:
         # Sentinel to close SSE stream
         q.put(None)
+        # Clean up custom mode registration
+        if custom_mode_key:
+            unregister_custom_mode(custom_mode_key)
         # Clean up uploaded files
         for p in doc_paths:
             try:
@@ -139,6 +144,9 @@ async def analyze(
     url: str = Form(""),
     mode: str = Form("due-diligence"),
     vs_company: str = Form(""),
+    agents: str = Form(""),
+    feedback_loop: bool = Form(False),
+    recommendation: bool = Form(False),
     files: list[UploadFile] = File(default=[]),
 ):
     """Accept form submission, save uploads, spawn background thread."""
@@ -155,6 +163,34 @@ async def analyze(
             dest.write_bytes(content)
             doc_paths.append(str(dest))
 
+    # ── Custom mode registration ──────────────────────────────────────────
+    custom_mode_key: str | None = None
+    if agents:
+        from config import VALID_PHASE1_AGENTS, VALID_PHASE2_AGENTS, VALID_PHASE3_AGENTS
+        agent_list = [a.strip() for a in agents.split(",") if a.strip()]
+        p1 = [a for a in agent_list if a in VALID_PHASE1_AGENTS]
+        p2 = [a for a in agent_list if a in VALID_PHASE2_AGENTS and a != "strategic_insight"]
+        p2_seq = [a for a in agent_list if a == "strategic_insight"]
+        p3 = [a for a in agent_list if a in VALID_PHASE3_AGENTS]
+        if not p3:
+            p3 = ["critique_agent"]
+
+        custom_mode_key = f"custom-{job_id}"
+        try:
+            register_custom_mode(
+                phase1=p1, phase2_parallel=p2, phase2_sequential=p2_seq,
+                phase3=p3, feedback_loop=feedback_loop,
+                recommendation=recommendation, mode_key=custom_mode_key,
+            )
+            mode = custom_mode_key
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    # Validate mode
+    from config import VALID_MODES, MODE_REGISTRY
+    if mode not in VALID_MODES and mode not in MODE_REGISTRY:
+        mode = "due-diligence"
+
     # Register job
     _jobs[job_id] = {
         "status": "running",
@@ -162,12 +198,8 @@ async def analyze(
         "recommendation": None,
         "pdf_path": None,
         "error": None,
+        "custom_mode_key": custom_mode_key,
     }
-
-    # Validate mode
-    from config import VALID_MODES
-    if mode not in VALID_MODES:
-        mode = "due-diligence"
 
     # Spawn background thread
     t = threading.Thread(
