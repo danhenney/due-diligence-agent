@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
 import pdf_report
-from config import validate_config, register_custom_mode, unregister_custom_mode
+from config import validate_config, register_custom_mode, unregister_custom_mode, MODE_REGISTRY
 from graph.workflow import build_graph
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -27,8 +27,11 @@ WEB_DIR = Path(__file__).parent / "web"
 UPLOADS_DIR = Path("uploads")
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-# In-memory job store: job_id → {status, queue, recommendation, pdf_path, error}
+# In-memory job store: job_id → {status, queue, recommendation, pdf_path, error, ...}
 _jobs: dict[str, dict[str, Any]] = {}
+
+# Checkpoint node names that trigger human review pauses
+_CHECKPOINT_NODES = {"checkpoint_phase1", "checkpoint_phase2", "checkpoint_phase3"}
 
 # ── Serve frontend ─────────────────────────────────────────────────────────────
 
@@ -40,6 +43,26 @@ async def serve_index():
     return HTMLResponse(content=index.read_text(encoding="utf-8"))
 
 
+# ── Mode config endpoint ────────────────────────────────────────────────────
+
+@app.get("/api/modes")
+async def get_modes():
+    """Return available modes and their agent configurations."""
+    modes = {}
+    for key, cfg in MODE_REGISTRY.items():
+        if key.startswith("custom-"):
+            continue
+        modes[key] = {
+            "phase1_agents": cfg["phase1_agents"],
+            "phase2_parallel": cfg["phase2_parallel"],
+            "phase2_sequential": cfg.get("phase2_sequential", []),
+            "phase3_agents": cfg["phase3_agents"],
+            "has_feedback_loop": cfg["has_feedback_loop"],
+            "has_recommendation": cfg["has_recommendation"],
+        }
+    return JSONResponse(modes)
+
+
 # ── Job lifecycle ─────────────────────────────────────────────────────────────
 
 def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
@@ -47,7 +70,7 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
     """Background thread: runs the graph and posts SSE events to the queue."""
     job = _jobs[job_id]
     q: queue.Queue = job["queue"]
-    # Track custom mode key for cleanup
+    auto_approve: bool = job.get("auto_approve", False)
     custom_mode_key: str | None = job.get("custom_mode_key")
 
     try:
@@ -81,6 +104,12 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
             "report_structure": None,
             "final_report": None,
             "recommendation": None,
+            # Phase 5 — per-phase codex verification
+            "verification_phase1": None,
+            "verification_phase2": None,
+            "verification_phase3": None,
+            "verification_result": None,
+            "codex_retry_count": 0,
             # Cross-pollination
             "settled_claims": None,
             "phase1_tensions": None,
@@ -89,6 +118,9 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
             "phase1_context": None,
             "feedback_loop_count": 0,
             "weak_sections": [],
+            # Human checkpoints
+            "checkpoint_feedback": None,
+            "auto_approve": auto_approve,
             # Bookkeeping
             "messages": [],
             "errors": [],
@@ -107,15 +139,54 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
                     "current_phase": merged.get("current_phase", ""),
                 })
 
+            # ── Checkpoint pause logic ────────────────────────────────────
+            completed_nodes = set(step.keys())
+            checkpoint_hit = completed_nodes & _CHECKPOINT_NODES
+            if checkpoint_hit and not auto_approve:
+                cp_node = checkpoint_hit.pop()
+                phase_num = {"checkpoint_phase1": 1, "checkpoint_phase2": 2,
+                             "checkpoint_phase3": 3}[cp_node]
+
+                # Send checkpoint event to client
+                q.put({
+                    "type": "checkpoint",
+                    "phase": phase_num,
+                    "message": f"Phase {phase_num} complete. Awaiting approval.",
+                })
+
+                # Block until client responds
+                job["checkpoint_event"].clear()
+                job["checkpoint_event"].wait(timeout=7200)  # 2-hour timeout
+
+                action = job.get("checkpoint_action", "proceed")
+                if action == "stop":
+                    job["status"] = "stopped"
+                    q.put({"type": "stopped", "phase": phase_num})
+                    q.put(None)
+                    return
+
+                # Reset for next checkpoint
+                job["checkpoint_action"] = "proceed"
+
         # Generate PDF
         recommendation = merged.get("recommendation") or "WATCH"
         pdf_path = pdf_report.generate_pdf(merged, job_id)
 
+        verification = merged.get("verification_result") or {}
+
         job["status"] = "complete"
         job["recommendation"] = recommendation
         job["pdf_path"] = pdf_path
+        job["verification"] = verification
 
-        q.put({"type": "complete", "recommendation": recommendation})
+        q.put({
+            "type": "complete",
+            "recommendation": recommendation,
+            "verification": {
+                "status": verification.get("status", "skipped"),
+                "overall": verification.get("overall", "N/A"),
+            },
+        })
 
     except Exception as exc:
         job["status"] = "error"
@@ -147,6 +218,7 @@ async def analyze(
     agents: str = Form(""),
     feedback_loop: bool = Form(False),
     recommendation: bool = Form(False),
+    auto_approve: bool = Form(False),
     files: list[UploadFile] = File(default=[]),
 ):
     """Accept form submission, save uploads, spawn background thread."""
@@ -165,6 +237,8 @@ async def analyze(
 
     # ── Custom mode registration ──────────────────────────────────────────
     custom_mode_key: str | None = None
+    effective_mode = mode
+
     if agents:
         from config import VALID_PHASE1_AGENTS, VALID_PHASE2_AGENTS, VALID_PHASE3_AGENTS
         agent_list = [a.strip() for a in agents.split(",") if a.strip()]
@@ -182,14 +256,17 @@ async def analyze(
                 phase3=p3, feedback_loop=feedback_loop,
                 recommendation=recommendation, mode_key=custom_mode_key,
             )
-            mode = custom_mode_key
+            effective_mode = custom_mode_key
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 
     # Validate mode
-    from config import VALID_MODES, MODE_REGISTRY
-    if mode not in VALID_MODES and mode not in MODE_REGISTRY:
-        mode = "due-diligence"
+    from config import VALID_MODES
+    if effective_mode not in VALID_MODES and effective_mode not in MODE_REGISTRY:
+        effective_mode = "due-diligence"
+
+    # Resolve mode config for response
+    cfg = MODE_REGISTRY.get(effective_mode, MODE_REGISTRY["due-diligence"])
 
     # Register job
     _jobs[job_id] = {
@@ -199,17 +276,45 @@ async def analyze(
         "pdf_path": None,
         "error": None,
         "custom_mode_key": custom_mode_key,
+        "auto_approve": auto_approve,
+        "checkpoint_event": threading.Event(),
+        "checkpoint_action": "proceed",
     }
 
     # Spawn background thread
     t = threading.Thread(
         target=_run_analysis,
-        args=(job_id, company, url, doc_paths, mode, vs_company or None),
+        args=(job_id, company, url, doc_paths, effective_mode, vs_company or None),
         daemon=True,
     )
     t.start()
 
-    return JSONResponse({"job_id": job_id})
+    return JSONResponse({
+        "job_id": job_id,
+        "mode": mode,  # original mode name (not custom key)
+        "config": {
+            "phase1_agents": cfg["phase1_agents"],
+            "phase2_parallel": cfg["phase2_parallel"],
+            "phase2_sequential": cfg.get("phase2_sequential", []),
+            "phase3_agents": cfg["phase3_agents"],
+            "has_feedback_loop": cfg["has_feedback_loop"],
+            "has_recommendation": cfg["has_recommendation"],
+        },
+    })
+
+
+@app.post("/api/checkpoint/{job_id}")
+async def checkpoint_response(job_id: str, request: Request):
+    """Handle human checkpoint decision (proceed or stop)."""
+    if job_id not in _jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    body = await request.json()
+    job = _jobs[job_id]
+    job["checkpoint_action"] = body.get("action", "proceed")
+    job["checkpoint_event"].set()
+
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/stream/{job_id}")
@@ -241,7 +346,7 @@ async def stream_events(job_id: str, request: Request):
 
             yield f"data: {json.dumps(event)}\n\n"
 
-            if event.get("type") in ("complete", "error"):
+            if event.get("type") in ("complete", "error", "stopped"):
                 break
 
     return StreamingResponse(

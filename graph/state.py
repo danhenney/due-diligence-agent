@@ -42,6 +42,13 @@ class DueDiligenceState(TypedDict):
     final_report: str | None
     recommendation: str | None        # INVEST / WATCH / PASS
 
+    # ── Phase 5 — Codex Verification (per-phase) ─────────────────────────
+    verification_phase1: dict | None   # codex check after Phase 1
+    verification_phase2: dict | None   # codex check after Phase 2
+    verification_phase3: dict | None   # codex check after Phase 3
+    verification_result: dict | None   # codex final check after Phase 4
+    codex_retry_count: int             # per-phase retry tracker (resets each phase)
+
     # ── Cross-pollination (Smart Aggregator output) ───────────────────────
     settled_claims: list[str] | None  # facts all Phase 1 agents agree on
     phase1_tensions: list[str] | None # contradictions between Phase 1 agents

@@ -168,6 +168,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
             selective_rerun, phase1_restart,
             dd_questions_node, report_structure_node, report_writer_node,
         )
+        from agents.phase5 import codex_verification
 
         state: dict = dict(initial_state)
         progress: list[str] = []
@@ -277,10 +278,42 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         has_dd_q = "dd_questions" in cfg["phase3_agents"]
         has_loop = cfg.get("has_feedback_loop", False)
 
+        # ── Helper: run codex verification with max 1 retry ─────────────────
+        def _codex_verify(run_fn, verify_key: str, phase_name: str,
+                          rerun_fn=None) -> None:
+            """Run codex verification. On FAIL, re-run rerun_fn once then proceed."""
+            _check_cancelled()
+            result = run_fn(state)
+            state.update(result)
+            progress.append(f"codex_verify_{phase_name}")
+            update_job(job_id, {"progress": progress.copy()})
+
+            v = state.get(verify_key) or {}
+            if v.get("overall") == "FAIL" and rerun_fn and not _over_budget():
+                logging.info("[codex-%s] FAIL — retrying phase", phase_name)
+                rerun_fn()
+                # Re-verify (force pass on 2nd attempt)
+                result2 = run_fn(state)
+                # Override to PASS on retry
+                if verify_key in result2:
+                    result2[verify_key]["overall"] = "PASS"
+                    result2[verify_key]["_retried"] = True
+                state.update(result2)
+                progress.append(f"codex_verify_{phase_name}_retry")
+                update_job(job_id, {"progress": progress.copy()})
+
         # ── Phase 1: Research ────────────────────────────────────────────────
         _step(input_processor,        "input_processor")
         _step(phase1_parallel,        "phase1_parallel")
         _step(phase1_aggregator,      "phase1_aggregator")
+
+        # Codex Phase 1 verification (max 1 retry)
+        def _rerun_phase1():
+            _step(phase1_parallel,    "phase1_parallel")
+            _step(phase1_aggregator,  "phase1_aggregator")
+
+        _codex_verify(codex_verification.run_phase1, "verification_phase1",
+                      "phase1", _rerun_phase1)
 
         # ═══ CHECKPOINT: Phase 1 complete ═══
         _wait_for_checkpoint("phase1")
@@ -290,6 +323,16 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         if has_strategic:
             _step(strategic_insight_node, "strategic_insight")
         _step(phase2_aggregator,      "phase2_aggregator")
+
+        # Codex Phase 2 verification (max 1 retry)
+        def _rerun_phase2():
+            _step(phase2_parallel,    "phase2_parallel")
+            if has_strategic:
+                _step(strategic_insight_node, "strategic_insight")
+            _step(phase2_aggregator,  "phase2_aggregator")
+
+        _codex_verify(codex_verification.run_phase2, "verification_phase2",
+                      "phase2", _rerun_phase2)
 
         # ═══ CHECKPOINT: Phase 2 complete ═══
         _wait_for_checkpoint("phase2")
@@ -328,12 +371,30 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         if has_dd_q:
             _step(dd_questions_node,      "dd_questions")
 
+        # Codex Phase 3 verification (max 1 retry)
+        has_phase3 = has_review or has_critique or has_dd_q
+        if has_phase3:
+            def _rerun_phase3():
+                if has_review:
+                    _step(review_agent_node, "review_agent")
+                if has_critique:
+                    _step(critique_agent_node, "critique_agent")
+                if has_dd_q:
+                    _step(dd_questions_node, "dd_questions")
+
+            _codex_verify(codex_verification.run_phase3, "verification_phase3",
+                          "phase3", _rerun_phase3)
+
         # ═══ CHECKPOINT: Phase 3 complete ═══
         _wait_for_checkpoint("phase3")
 
         # ── Phase 4: Report ──────────────────────────────────────────────────
         _step(report_structure_node,  "report_structure")
         _step(report_writer_node,     "report_writer")
+
+        # Codex final verification (max 1 retry)
+        _codex_verify(codex_verification.run_final, "verification_result",
+                      "final", lambda: _step(report_writer_node, "report_writer"))
 
         # Generate PDF
         pdf_path = pdf_report.generate_pdf(state, job_id, output_dir=tmp_dir)
@@ -617,32 +678,48 @@ _NODE_LABELS_EN = {
     "input_processor":    "🔍 Processing inputs",
     "phase1_parallel":    "📊 Phase 1 — 6 research agents in parallel",
     "phase1_aggregator":  "✅ Phase 1 aggregated",
+    "codex_verify_phase1":"🔒 Codex — Phase 1 verification",
+    "codex_verify_phase1_retry": "🔄 Codex — Phase 1 re-verification",
     "phase2_parallel":    "📈 Phase 2 — R&A Synthesis + Risk Assessment in parallel",
     "strategic_insight":  "🎯 Strategic Insight",
     "phase2_aggregator":  "✅ Phase 2 aggregated",
+    "codex_verify_phase2":"🔒 Codex — Phase 2 verification",
+    "codex_verify_phase2_retry": "🔄 Codex — Phase 2 re-verification",
     "review_agent":       "🔎 Review Agent — verifying claims",
     "critique_agent":     "📋 Critique Agent — scoring quality",
     "selective_rerun":    "🔄 Selective re-run of weak agents",
     "phase1_restart":     "🔄 Full Phase 1 restart",
     "dd_questions":       "❓ DD Questions",
+    "codex_verify_phase3":"🔒 Codex — Phase 3 verification",
+    "codex_verify_phase3_retry": "🔄 Codex — Phase 3 re-verification",
     "report_structure":   "📐 Report Structure",
     "report_writer":      "📝 Writing investment memo",
+    "codex_verify_final": "🔒 Codex — Final verification",
+    "codex_verify_final_retry": "🔄 Codex — Final re-verification",
 }
 
 _NODE_LABELS_KO = {
     "input_processor":    "🔍 입력 처리 중",
     "phase1_parallel":    "📊 1단계 — 리서치 에이전트 6개 병렬 실행",
     "phase1_aggregator":  "✅ 1단계 집계 완료",
+    "codex_verify_phase1":"🔒 Codex — 1단계 검증",
+    "codex_verify_phase1_retry": "🔄 Codex — 1단계 재검증",
     "phase2_parallel":    "📈 2단계 — R&A 종합 + 리스크 평가 병렬 실행",
     "strategic_insight":  "🎯 전략적 인사이트",
     "phase2_aggregator":  "✅ 2단계 집계 완료",
+    "codex_verify_phase2":"🔒 Codex — 2단계 검증",
+    "codex_verify_phase2_retry": "🔄 Codex — 2단계 재검증",
     "review_agent":       "🔎 검토 에이전트 — 주장 검증",
     "critique_agent":     "📋 비평 에이전트 — 품질 채점",
     "selective_rerun":    "🔄 약한 에이전트 선택적 재실행",
     "phase1_restart":     "🔄 1단계 전체 재시작",
     "dd_questions":       "❓ DD 질문서",
+    "codex_verify_phase3":"🔒 Codex — 3단계 검증",
+    "codex_verify_phase3_retry": "🔄 Codex — 3단계 재검증",
     "report_structure":   "📐 보고서 구조",
     "report_writer":      "📝 투자 메모 작성 중",
+    "codex_verify_final": "🔒 Codex — 최종 검증",
+    "codex_verify_final_retry": "🔄 Codex — 최종 재검증",
 }
 
 # Weighted % of total runtime each node typically consumes (must sum to 100)

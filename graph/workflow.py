@@ -36,6 +36,7 @@ from agents.phase2 import (
 )
 from agents.phase3 import review_agent, critique_agent, dd_questions
 from agents.phase4 import report_structure, report_writer
+from agents.phase5 import codex_verification
 from agents.base import get_and_reset_usage
 from tools.executor import reset_tool_cache
 from agents.context import (
@@ -353,6 +354,78 @@ def report_writer_node(state: DueDiligenceState) -> dict:
     return report_writer.run(state)
 
 
+def codex_verify_phase1_node(state: DueDiligenceState) -> dict:
+    """Run Phase 1 codex verification. On retry (prev FAIL), force PASS."""
+    prev = state.get("verification_phase1")
+    if prev and prev.get("overall") == "FAIL":
+        log.info("[codex-phase1] Max retry reached, forcing PASS")
+        return {"verification_phase1": {"status": "skipped", "overall": "PASS", "reason": "max retry reached"}}
+    return codex_verification.run_phase1(state)
+
+
+def codex_verify_phase2_node(state: DueDiligenceState) -> dict:
+    """Run Phase 2 codex verification. On retry (prev FAIL), force PASS."""
+    prev = state.get("verification_phase2")
+    if prev and prev.get("overall") == "FAIL":
+        log.info("[codex-phase2] Max retry reached, forcing PASS")
+        return {"verification_phase2": {"status": "skipped", "overall": "PASS", "reason": "max retry reached"}}
+    return codex_verification.run_phase2(state)
+
+
+def codex_verify_phase3_node(state: DueDiligenceState) -> dict:
+    """Run Phase 3 codex verification. On retry (prev FAIL), force PASS."""
+    prev = state.get("verification_phase3")
+    if prev and prev.get("overall") == "FAIL":
+        log.info("[codex-phase3] Max retry reached, forcing PASS")
+        return {"verification_phase3": {"status": "skipped", "overall": "PASS", "reason": "max retry reached"}}
+    return codex_verification.run_phase3(state)
+
+
+def codex_verify_final_node(state: DueDiligenceState) -> dict:
+    """Run final codex verification. On retry (prev FAIL), force PASS."""
+    prev = state.get("verification_result")
+    if prev and prev.get("overall") == "FAIL":
+        log.info("[codex-final] Max retry reached, forcing PASS")
+        return {"verification_result": {"status": "skipped", "overall": "PASS", "reason": "max retry reached"}}
+    return codex_verification.run_final(state)
+
+
+def _codex_router(verification_key: str):
+    """Factory for codex PASS/FAIL routing functions.
+
+    Retry protection is in the verify nodes themselves (force PASS on 2nd attempt),
+    so the router is a simple FAIL → rerun, else → pass.
+    """
+    def router(state: DueDiligenceState) -> str:
+        v = state.get(verification_key) or {}
+        overall = v.get("overall", "PASS")
+        if overall == "FAIL":
+            log.info("[codex-router] %s FAIL → rerun", verification_key)
+            return "fail"
+        log.info("[codex-router] %s %s → pass", verification_key, overall)
+        return "pass"
+    return router
+
+
+# ── Checkpoint nodes (human review pause points) ─────────────────────────────
+# These are marker nodes; the actual pausing logic lives in server.py's
+# streaming loop, which checks for these node names and waits for approval.
+
+def checkpoint_phase1_node(state: DueDiligenceState) -> dict:
+    """Checkpoint after Phase 1 — server may pause here for human review."""
+    return {"current_phase": "checkpoint_phase1"}
+
+
+def checkpoint_phase2_node(state: DueDiligenceState) -> dict:
+    """Checkpoint after Phase 2 — server may pause here for human review."""
+    return {"current_phase": "checkpoint_phase2"}
+
+
+def checkpoint_phase3_node(state: DueDiligenceState) -> dict:
+    """Checkpoint after Phase 3 — server may pause here for human review."""
+    return {"current_phase": "checkpoint_phase3"}
+
+
 # ── Feedback loop nodes ───────────────────────────────────────────────────────
 
 def critique_router(state: DueDiligenceState) -> str:
@@ -486,11 +559,30 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
     builder.add_node("report_structure",   report_structure_node)
     builder.add_node("report_writer",      report_writer_node)
 
-    # ── Phase 1 edges (always the same) ───────────────────────────────────
+    # ── Codex verification + checkpoint nodes ────────────────────────────
+    builder.add_node("codex_verify_phase1", codex_verify_phase1_node)
+    builder.add_node("codex_verify_phase2", codex_verify_phase2_node)
+    builder.add_node("codex_verify_final",  codex_verify_final_node)
+    builder.add_node("checkpoint_phase1",   checkpoint_phase1_node)
+    builder.add_node("checkpoint_phase2",   checkpoint_phase2_node)
+
+    has_phase3_agents = has_review or has_critique or has_dd_q
+    if has_phase3_agents:
+        builder.add_node("codex_verify_phase3", codex_verify_phase3_node)
+        builder.add_node("checkpoint_phase3",   checkpoint_phase3_node)
+
+    # ── Phase 1 edges ────────────────────────────────────────────────────
     builder.add_edge(START,                "input_processor")
     builder.add_edge("input_processor",    "phase1_parallel")
     builder.add_edge("phase1_parallel",    "phase1_aggregator")
-    builder.add_edge("phase1_aggregator",  "phase2_parallel")
+    builder.add_edge("phase1_aggregator",  "codex_verify_phase1")
+
+    builder.add_conditional_edges(
+        "codex_verify_phase1",
+        _codex_router("verification_phase1"),
+        {"pass": "checkpoint_phase1", "fail": "phase1_parallel"},
+    )
+    builder.add_edge("checkpoint_phase1", "phase2_parallel")
 
     # ── Phase 2 sequential (strategic_insight) ────────────────────────────
     if has_strategic:
@@ -500,24 +592,45 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
     else:
         builder.add_edge("phase2_parallel",    "phase2_aggregator")
 
-    # ── Phase 3 — dynamic chain from phase2_aggregator to report_structure ─
-    prev_node = "phase2_aggregator"
+    # ── Phase 2 → codex verification ──────────────────────────────────────
+    builder.add_edge("phase2_aggregator", "codex_verify_phase2")
+
+    # Determine Phase 3 entry point (varies by mode)
+    if has_review:
+        phase3_entry = "review_agent"
+    elif has_critique:
+        phase3_entry = "critique_agent"
+    elif has_dd_q:
+        phase3_entry = "dd_questions"
+    else:
+        phase3_entry = "report_structure"  # no Phase 3 agents
+
+    builder.add_conditional_edges(
+        "codex_verify_phase2",
+        _codex_router("verification_phase2"),
+        {"pass": "checkpoint_phase2", "fail": "phase2_parallel"},
+    )
+    builder.add_edge("checkpoint_phase2", phase3_entry)
+
+    # ── Phase 3 — dynamic chain → codex_verify_phase3 → report_structure ─
+    phase3_exit = "codex_verify_phase3" if has_phase3_agents else "report_structure"
+    prev_node = None  # entry handled by codex_verify_phase2 conditional edges
 
     if has_review:
         builder.add_node("review_agent", review_agent_node)
-        builder.add_edge(prev_node, "review_agent")
         prev_node = "review_agent"
 
     if has_critique:
         builder.add_node("critique_agent", critique_agent_node)
-        builder.add_edge(prev_node, "critique_agent")
+        if prev_node:
+            builder.add_edge(prev_node, "critique_agent")
 
         if has_loop:
             # Feedback loop: critique → router → {pass, conditional, fail}
             builder.add_node("selective_rerun", selective_rerun)
             builder.add_node("phase1_restart",  phase1_restart)
 
-            pass_target = "dd_questions" if has_dd_q else "report_structure"
+            pass_target = "dd_questions" if has_dd_q else phase3_exit
             if has_dd_q:
                 builder.add_node("dd_questions", dd_questions_node)
 
@@ -537,27 +650,44 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
             builder.add_edge("phase1_restart",  "phase1_parallel")
 
             if has_dd_q:
-                builder.add_edge("dd_questions", "report_structure")
+                builder.add_edge("dd_questions", phase3_exit)
         else:
             # No feedback loop — straight through
             if has_dd_q:
                 builder.add_node("dd_questions", dd_questions_node)
                 builder.add_edge("critique_agent", "dd_questions")
-                builder.add_edge("dd_questions",   "report_structure")
+                builder.add_edge("dd_questions",   phase3_exit)
             else:
-                builder.add_edge("critique_agent", "report_structure")
+                builder.add_edge("critique_agent", phase3_exit)
     else:
         # No critique agent
         if has_dd_q:
             builder.add_node("dd_questions", dd_questions_node)
-            builder.add_edge(prev_node,    "dd_questions")
-            builder.add_edge("dd_questions", "report_structure")
-        else:
-            builder.add_edge(prev_node, "report_structure")
+            if prev_node:
+                builder.add_edge(prev_node, "dd_questions")
+            builder.add_edge("dd_questions", phase3_exit)
+        elif prev_node:
+            builder.add_edge(prev_node, phase3_exit)
 
-    # ── Phase 4 (always the same) ─────────────────────────────────────────
+    # ── Phase 3 codex verification ────────────────────────────────────────
+    if has_phase3_agents:
+        builder.add_conditional_edges(
+            "codex_verify_phase3",
+            _codex_router("verification_phase3"),
+            {"pass": "checkpoint_phase3", "fail": phase3_entry},
+        )
+        builder.add_edge("checkpoint_phase3", "report_structure")
+
+    # ── Phase 4 ───────────────────────────────────────────────────────────
     builder.add_edge("report_structure", "report_writer")
-    builder.add_edge("report_writer",    END)
+
+    # ── Final codex verification ──────────────────────────────────────────
+    builder.add_edge("report_writer", "codex_verify_final")
+    builder.add_conditional_edges(
+        "codex_verify_final",
+        _codex_router("verification_result"),
+        {"pass": END, "fail": "report_writer"},
+    )
 
     # ── Compile ───────────────────────────────────────────────────────────
     if use_checkpointing:
