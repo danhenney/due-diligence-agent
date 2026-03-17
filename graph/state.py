@@ -13,6 +13,10 @@ class DueDiligenceState(TypedDict):
     is_public: bool | None            # True = public, False = private, None = unknown
     ticker: str | None                # resolved ticker symbol (public companies only)
 
+    # ── Mode ──────────────────────────────────────────────────────────────
+    mode: str                          # "due-diligence" | "industry-research" | "deep-dive" | "benchmark"
+    vs_company: str | None             # benchmark mode only: comparison target
+
     # ── Phase 1 — Research & Analysis (6 parallel agents) ─────────────────
     market_analysis: dict | None
     competitor_analysis: dict | None
@@ -25,6 +29,8 @@ class DueDiligenceState(TypedDict):
     ra_synthesis: dict | None
     risk_assessment: dict | None
     strategic_insight: dict | None
+    industry_synthesis: dict | None    # industry-research mode only
+    benchmark_synthesis: dict | None   # benchmark mode only
 
     # ── Phase 3 — Review & Critique ───────────────────────────────────────
     review_result: dict | None

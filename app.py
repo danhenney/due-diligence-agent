@@ -44,6 +44,8 @@ _AGENT_LABELS_EN = {
     "ra_synthesis":        "R&A Synthesis",
     "risk_assessment":     "Risk Assessment",
     "strategic_insight":   "Strategic Insight",
+    "industry_synthesis":  "Industry Synthesis",
+    "benchmark_synthesis": "Benchmark Synthesis",
     "review_agent":        "Review Agent",
     "critique_agent":      "Critique Agent",
     "selective_rerun":     "Selective Re-run",
@@ -63,6 +65,8 @@ _AGENT_LABELS_KO = {
     "ra_synthesis":        "R&A 종합",
     "risk_assessment":     "리스크 평가",
     "strategic_insight":   "전략적 인사이트",
+    "industry_synthesis":  "산업 구조 종합",
+    "benchmark_synthesis": "벤치마크 종합",
     "review_agent":        "검토 에이전트",
     "critique_agent":      "비평 에이전트",
     "selective_rerun":     "선택적 재실행",
@@ -80,6 +84,7 @@ _AGENT_OUTPUT_KEYS = [
     "market_analysis", "competitor_analysis", "financial_analysis",
     "tech_analysis", "legal_regulatory", "team_analysis",
     "ra_synthesis", "risk_assessment", "strategic_insight",
+    "industry_synthesis", "benchmark_synthesis",
     "review_result", "critique_result", "dd_questions",
     "report_structure",
 ]
@@ -155,6 +160,7 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
         import pptx_report
         from agents.base import get_and_reset_usage
         from config import MAX_COST_PER_ANALYSIS
+        from config import MODE_REGISTRY
         from graph.workflow import (
             input_processor, phase1_parallel, phase1_aggregator,
             phase2_parallel, strategic_insight_node, phase2_aggregator,
@@ -262,6 +268,15 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
                 "token_usage": token_usage.copy(),
             })
 
+        # ── Resolve mode config ───────────────────────────────────────────────
+        mode = state.get("mode", "due-diligence")
+        cfg = MODE_REGISTRY.get(mode, MODE_REGISTRY["due-diligence"])
+        has_strategic = bool(cfg.get("phase2_sequential"))
+        has_review = "review_agent" in cfg["phase3_agents"]
+        has_critique = "critique_agent" in cfg["phase3_agents"]
+        has_dd_q = "dd_questions" in cfg["phase3_agents"]
+        has_loop = cfg.get("has_feedback_loop", False)
+
         # ── Phase 1: Research ────────────────────────────────────────────────
         _step(input_processor,        "input_processor")
         _step(phase1_parallel,        "phase1_parallel")
@@ -272,39 +287,46 @@ def _run_pipeline(job_id: str, initial_state: dict, company: str, tmp_dir: str) 
 
         # ── Phase 2: Synthesis ───────────────────────────────────────────────
         _step(phase2_parallel,        "phase2_parallel")
-        _step(strategic_insight_node, "strategic_insight")
+        if has_strategic:
+            _step(strategic_insight_node, "strategic_insight")
         _step(phase2_aggregator,      "phase2_aggregator")
 
         # ═══ CHECKPOINT: Phase 2 complete ═══
         _wait_for_checkpoint("phase2")
 
         # ── Phase 3: Review + critique ───────────────────────────────────────
-        _step(review_agent_node,   "review_agent")
-        _step(critique_agent_node, "critique_agent")
-
-        route = critique_router(state)
-        progress.append(f"critique_router:{route}")
-        update_job(job_id, {"progress": progress.copy()})
-
-        if route != "pass" and not _over_budget():
-            if route == "conditional":
-                _step(selective_rerun, "selective_rerun")
-            elif route == "fail":
-                _step(phase1_restart, "phase1_restart")
-                _step(phase1_parallel, "phase1_parallel")
-                _step(phase1_aggregator, "phase1_aggregator")
-                _step(phase2_parallel, "phase2_parallel")
-                _step(strategic_insight_node, "strategic_insight")
-                _step(phase2_aggregator, "phase2_aggregator")
-
-            # Second review after rerun — always proceed regardless of score
+        if has_review:
             _step(review_agent_node,   "review_agent")
+        if has_critique:
             _step(critique_agent_node, "critique_agent")
-            route2 = critique_router(state)
-            progress.append(f"critique_router:{route2}")
-            update_job(job_id, {"progress": progress.copy()})
 
-        _step(dd_questions_node,      "dd_questions")
+            if has_loop:
+                route = critique_router(state)
+                progress.append(f"critique_router:{route}")
+                update_job(job_id, {"progress": progress.copy()})
+
+                if route != "pass" and not _over_budget():
+                    if route == "conditional":
+                        _step(selective_rerun, "selective_rerun")
+                    elif route == "fail":
+                        _step(phase1_restart, "phase1_restart")
+                        _step(phase1_parallel, "phase1_parallel")
+                        _step(phase1_aggregator, "phase1_aggregator")
+                        _step(phase2_parallel, "phase2_parallel")
+                        if has_strategic:
+                            _step(strategic_insight_node, "strategic_insight")
+                        _step(phase2_aggregator, "phase2_aggregator")
+
+                    # Second review after rerun — always proceed regardless of score
+                    if has_review:
+                        _step(review_agent_node,   "review_agent")
+                    _step(critique_agent_node, "critique_agent")
+                    route2 = critique_router(state)
+                    progress.append(f"critique_router:{route2}")
+                    update_job(job_id, {"progress": progress.copy()})
+
+        if has_dd_q:
+            _step(dd_questions_node,      "dd_questions")
 
         # ═══ CHECKPOINT: Phase 3 complete ═══
         _wait_for_checkpoint("phase3")
@@ -1426,6 +1448,21 @@ if st.session_state.phase == "form":
             horizontal=True,
             help="Auto-detect probes Yahoo Finance. Choose Private to skip stock/SEC data lookups.",
         )
+        analysis_mode = st.selectbox(
+            "Analysis Mode",
+            options=["due-diligence", "industry-research", "deep-dive", "benchmark"],
+            index=0,
+            help="due-diligence: full investment DD | industry-research: industry structure | deep-dive: non-investment analysis | benchmark: head-to-head comparison",
+            key="analysis_mode",
+        )
+        vs_company_input = ""
+        if analysis_mode == "benchmark":
+            vs_company_input = st.text_input(
+                "Benchmark Target",
+                placeholder="e.g. OpenAI, Samsung",
+                help="Company to compare against (required for benchmark mode).",
+                key="vs_company",
+            )
         uploaded_files = st.file_uploader(
             t("docs_label"),
             type=["pdf"],
@@ -1551,6 +1588,9 @@ if st.session_state.phase == "form":
             "is_public": is_public_value,
             "ticker": None,
             "language": lang_value,
+            # Mode
+            "mode": st.session_state.get("analysis_mode", "due-diligence"),
+            "vs_company": st.session_state.get("vs_company") or None,
             # Phase 1
             "market_analysis": None,
             "competitor_analysis": None,
@@ -1562,6 +1602,8 @@ if st.session_state.phase == "form":
             "ra_synthesis": None,
             "risk_assessment": None,
             "strategic_insight": None,
+            "industry_synthesis": None,
+            "benchmark_synthesis": None,
             # Phase 3
             "review_result": None,
             "critique_result": None,
@@ -1570,6 +1612,10 @@ if st.session_state.phase == "form":
             "report_structure": None,
             "final_report": None,
             "recommendation": None,
+            # Cross-pollination
+            "settled_claims": None,
+            "phase1_tensions": None,
+            "phase1_gaps": None,
             # Feedback loop
             "phase1_context": None,
             "feedback_loop_count": 0,

@@ -42,32 +42,52 @@ async def serve_index():
 
 # ── Job lifecycle ─────────────────────────────────────────────────────────────
 
-def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str]):
+def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str],
+                   mode: str = "due-diligence", vs_company: str | None = None):
     """Background thread: runs the graph and posts SSE events to the queue."""
     job = _jobs[job_id]
     q: queue.Queue = job["queue"]
 
     try:
-        graph = build_graph(use_checkpointing=False)
+        graph = build_graph(mode=mode, use_checkpointing=False)
         initial_state = {
             "company_name": company,
             "company_url": url or None,
             "uploaded_docs": doc_paths,
-            "financial_report": None,
-            "market_report": None,
-            "legal_report": None,
-            "management_report": None,
-            "tech_report": None,
-            "bull_case": None,
-            "bear_case": None,
-            "valuation": None,
-            "red_flags": [],
-            "verification": None,
-            "stress_test": None,
-            "completeness": None,
+            "is_public": None,
+            "ticker": None,
+            "mode": mode,
+            "vs_company": vs_company,
+            # Phase 1
+            "market_analysis": None,
+            "competitor_analysis": None,
+            "financial_analysis": None,
+            "tech_analysis": None,
+            "legal_regulatory": None,
+            "team_analysis": None,
+            # Phase 2
+            "ra_synthesis": None,
+            "risk_assessment": None,
+            "strategic_insight": None,
+            "industry_synthesis": None,
+            "benchmark_synthesis": None,
+            # Phase 3
+            "review_result": None,
+            "critique_result": None,
+            "dd_questions": None,
+            # Phase 4
+            "report_structure": None,
             "final_report": None,
             "recommendation": None,
-            "orchestrator_briefing": None,
+            # Cross-pollination
+            "settled_claims": None,
+            "phase1_tensions": None,
+            "phase1_gaps": None,
+            # Feedback loop
+            "phase1_context": None,
+            "feedback_loop_count": 0,
+            "weak_sections": [],
+            # Bookkeeping
             "messages": [],
             "errors": [],
             "current_phase": "init",
@@ -117,6 +137,8 @@ def _run_analysis(job_id: str, company: str, url: str, doc_paths: list[str]):
 async def analyze(
     company: str = Form(...),
     url: str = Form(""),
+    mode: str = Form("due-diligence"),
+    vs_company: str = Form(""),
     files: list[UploadFile] = File(default=[]),
 ):
     """Accept form submission, save uploads, spawn background thread."""
@@ -142,10 +164,15 @@ async def analyze(
         "error": None,
     }
 
+    # Validate mode
+    from config import VALID_MODES
+    if mode not in VALID_MODES:
+        mode = "due-diligence"
+
     # Spawn background thread
     t = threading.Thread(
         target=_run_analysis,
-        args=(job_id, company, url, doc_paths),
+        args=(job_id, company, url, doc_paths, mode, vs_company or None),
         daemon=True,
     )
     t.start()

@@ -101,6 +101,8 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             tavily_tools.NEWS_SEARCH_TOOL,
         ],
         "strategic_insight": [],
+        "industry_synthesis": [],
+        "benchmark_synthesis": [],
         # Phase 3 — Review & Critique
         "review_agent": [
             dart_tools.DART_FINSTATE_TOOL,

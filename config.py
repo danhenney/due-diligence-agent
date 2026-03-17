@@ -36,6 +36,58 @@ CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./checkpoints.db")
 # Output
 REPORTS_DIR = os.getenv("REPORTS_DIR", "./reports")
 
+# ── Analysis Modes ────────────────────────────────────────────────────────
+MODE_REGISTRY = {
+    "due-diligence": {
+        "phase1_agents": [
+            "market_analysis", "competitor_analysis", "financial_analysis",
+            "tech_analysis", "legal_regulatory", "team_analysis",
+        ],
+        "phase2_parallel": ["ra_synthesis", "risk_assessment"],
+        "phase2_sequential": ["strategic_insight"],
+        "phase3_agents": ["review_agent", "critique_agent", "dd_questions"],
+        "phase4_sections": 6,
+        "report_type": "due_diligence",
+        "has_feedback_loop": True,
+        "has_recommendation": True,
+    },
+    "industry-research": {
+        "phase1_agents": ["market_analysis", "competitor_analysis", "tech_analysis"],
+        "phase2_parallel": ["industry_synthesis"],
+        "phase2_sequential": [],
+        "phase3_agents": ["critique_agent"],
+        "phase4_sections": 3,
+        "report_type": "industry_research",
+        "has_feedback_loop": False,
+        "has_recommendation": False,
+    },
+    "deep-dive": {
+        "phase1_agents": [
+            "financial_analysis", "tech_analysis", "team_analysis", "legal_regulatory",
+        ],
+        "phase2_parallel": ["ra_synthesis", "risk_assessment"],
+        "phase2_sequential": [],
+        "phase3_agents": ["review_agent", "critique_agent"],
+        "phase4_sections": 4,
+        "report_type": "deep_dive",
+        "has_feedback_loop": True,
+        "has_recommendation": False,
+    },
+    "benchmark": {
+        "phase1_agents": ["competitor_analysis", "financial_analysis", "tech_analysis"],
+        "phase2_parallel": ["benchmark_synthesis"],
+        "phase2_sequential": [],
+        "phase3_agents": ["critique_agent"],
+        "phase4_sections": 3,
+        "report_type": "benchmark",
+        "has_feedback_loop": False,
+        "has_recommendation": False,
+    },
+}
+
+VALID_MODES = list(MODE_REGISTRY.keys())
+
+
 def validate_config() -> list[str]:
     """Return list of missing required config keys."""
     missing = []

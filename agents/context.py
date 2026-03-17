@@ -116,6 +116,16 @@ def slim_dd_questions(r: Any) -> dict:
     d = _pick(r, "unresolved_issues", "dd_questionnaire", "summary")
     return d
 
+def slim_industry_synthesis(r: Any) -> dict:
+    d = _pick(r, "summary", "industry_stage", "market_size", "growth_drivers",
+              "porters_five_forces", "strategic_opportunities", "confidence_score")
+    return d
+
+def slim_benchmark_synthesis(r: Any) -> dict:
+    d = _pick(r, "summary", "company_a", "company_b", "scorecard",
+              "financial_benchmark", "confidence_score")
+    return d
+
 
 # ── Rich helpers (report_writer only) ─────────────────────────────────────────
 # The report_writer has NO tools → no accumulated conversation → safe to give
@@ -215,6 +225,19 @@ def rich_critique(r: Any) -> dict:
     if isinstance(d.get("feedback"), str) and len(d["feedback"]) > 800:
         d["feedback"] = d["feedback"][:800] + "…"
     return d
+
+def rich_industry_synthesis(r: Any) -> dict:
+    return _pick_rich(r, "summary", "industry_stage", "market_size",
+                      "growth_drivers", "inhibitors", "value_chain",
+                      "porters_five_forces", "tech_trends",
+                      "strategic_opportunities", "structural_risks",
+                      "outlook_scenarios", "confidence_score")
+
+def rich_benchmark_synthesis(r: Any) -> dict:
+    return _pick_rich(r, "summary", "company_a", "company_b",
+                      "profile_comparison", "financial_benchmark",
+                      "tech_benchmark", "market_benchmark",
+                      "scorecard", "confidence_score")
 
 def rich_dd_questions(r: Any) -> dict:
     d = {}

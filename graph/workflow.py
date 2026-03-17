@@ -1,18 +1,12 @@
 """LangGraph StateGraph construction for the due diligence pipeline.
 
-Flow:
-  START → input_processor
-        → phase1_parallel (6 agents, concurrent)
-        → phase1_aggregator
-        → phase2_parallel (ra_synthesis + risk_assessment, 2 agents concurrent)
-        → strategic_insight (sequential, needs ra_synthesis + risk_assessment)
-        → phase2_aggregator
-        → review_agent (sequential)
-        → critique_agent (sequential)
-        → critique_router (CONDITIONAL EDGE)
-             ├─ "pass" → dd_questions → report_structure → report_writer → END
-             ├─ "conditional" → selective_rerun → review_agent (loop back)
-             └─ "fail" → phase1_restart → phase1_parallel (loop back)
+Supports 4 analysis modes via MODE_REGISTRY (config.py):
+  - due-diligence:      full 6-agent Phase 1, feedback loop, recommendation
+  - industry-research:  3 agents, industry_synthesis, no loop
+  - deep-dive:          4 agents, ra+risk synthesis, loop, no recommendation
+  - benchmark:          3 agents, benchmark_synthesis, no loop
+
+Graph topology is built dynamically by build_graph(mode).
 """
 from __future__ import annotations
 
@@ -25,7 +19,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from graph.state import DueDiligenceState
-from config import CHECKPOINT_DB_PATH
+from config import CHECKPOINT_DB_PATH, MODE_REGISTRY
 
 # ── Import all agents ─────────────────────────────────────────────────────────
 from agents.phase1 import (
@@ -36,7 +30,10 @@ from agents.phase1 import (
     legal_regulatory,
     team_analysis,
 )
-from agents.phase2 import ra_synthesis, risk_assessment, strategic_insight
+from agents.phase2 import (
+    ra_synthesis, risk_assessment, strategic_insight,
+    industry_synthesis, benchmark_synthesis,
+)
 from agents.phase3 import review_agent, critique_agent, dd_questions
 from agents.phase4 import report_structure, report_writer
 from agents.base import get_and_reset_usage
@@ -52,10 +49,41 @@ log = logging.getLogger(__name__)
 
 _AGENT_TIMEOUT_SEC = 600  # 10-minute timeout per agent
 
+# ── Agent function registries ─────────────────────────────────────────────────
+# Maps agent name (as used in MODE_REGISTRY) → run function
+
+PHASE1_AGENT_FNS = {
+    "market_analysis": market_analysis.run,
+    "competitor_analysis": competitor_analysis.run,
+    "financial_analysis": financial_analysis.run,
+    "tech_analysis": tech_analysis.run,
+    "legal_regulatory": legal_regulatory.run,
+    "team_analysis": team_analysis.run,
+}
+
+PHASE2_AGENT_FNS = {
+    "ra_synthesis": ra_synthesis.run,
+    "risk_assessment": risk_assessment.run,
+    "strategic_insight": strategic_insight.run,
+    "industry_synthesis": industry_synthesis.run,
+    "benchmark_synthesis": benchmark_synthesis.run,
+}
+
+# Slim context builders per Phase 1 agent (for aggregator)
+PHASE1_SLIM_FNS = {
+    "market_analysis": ("market", slim_market_analysis),
+    "competitor_analysis": ("competitors", slim_competitor),
+    "financial_analysis": ("financial", slim_financial_analysis),
+    "tech_analysis": ("tech", slim_tech),
+    "legal_regulatory": ("legal", slim_legal_regulatory),
+    "team_analysis": ("team", slim_team),
+}
+
 # ── Disk-based output persistence ────────────────────────────────────────────
 import json as _json
 import os as _os
 import re as _re
+
 
 def _save_agent_output(company_name: str, agent_name: str, result: dict) -> None:
     """Persist agent result to outputs/<company_slug>/<agent_name>.json.
@@ -120,7 +148,7 @@ def _detect_company_type(company_name: str) -> tuple[bool, str | None]:
 
 
 def input_processor(state: DueDiligenceState) -> dict:
-    """Validate inputs and set initial phase marker."""
+    """Validate inputs, detect company type, set initial phase marker."""
     reset_tool_cache()
     errors = []
     if not state.get("company_name", "").strip():
@@ -131,30 +159,29 @@ def input_processor(state: DueDiligenceState) -> dict:
     if is_public is None:
         is_public, ticker = _detect_company_type(state.get("company_name", ""))
 
+    # Default mode if not provided
+    mode = state.get("mode") or "due-diligence"
+    if mode not in MODE_REGISTRY:
+        errors.append(f"Invalid mode '{mode}'. Valid: {list(MODE_REGISTRY.keys())}")
+        mode = "due-diligence"
+
     return {
         "current_phase": "phase1",
         "errors": errors,
         "is_public": is_public,
         "ticker": ticker,
+        "mode": mode,
         "feedback_loop_count": 0,
         "weak_sections": [],
     }
 
 
 def phase1_parallel(state: DueDiligenceState) -> dict:
-    """Run Phase 1 agents in batches of 2 to stay within free-tier API limits."""
-    agent_names = [
-        "market_analysis", "competitor_analysis", "financial_analysis",
-        "tech_analysis", "legal_regulatory", "team_analysis",
-    ]
-    agent_fns = [
-        market_analysis.run,
-        competitor_analysis.run,
-        financial_analysis.run,
-        tech_analysis.run,
-        legal_regulatory.run,
-        team_analysis.run,
-    ]
+    """Run Phase 1 agents (dynamic per mode) in batches of 2."""
+    mode = state.get("mode", "due-diligence")
+    cfg = MODE_REGISTRY[mode]
+    agent_names = cfg["phase1_agents"]
+    agent_fns = [PHASE1_AGENT_FNS[name] for name in agent_names]
 
     merged: dict[str, Any] = {"current_phase": "phase1_done"}
     errors = []
@@ -194,15 +221,22 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
 
 
 def phase1_aggregator(state: DueDiligenceState) -> dict:
-    """Build compact Phase 1 context + extract settled claims and tensions."""
-    phase1_context = compact({
-        "market":      slim_market_analysis(state.get("market_analysis")),
-        "competitors": slim_competitor(state.get("competitor_analysis")),
-        "financial":   slim_financial_analysis(state.get("financial_analysis")),
-        "tech":        slim_tech(state.get("tech_analysis")),
-        "legal":       slim_legal_regulatory(state.get("legal_regulatory")),
-        "team":        slim_team(state.get("team_analysis")),
-    })
+    """Build compact Phase 1 context + extract settled claims and tensions.
+
+    Dynamically aggregates only the agents that ran for the current mode.
+    """
+    mode = state.get("mode", "due-diligence")
+    cfg = MODE_REGISTRY[mode]
+    active_agents = cfg["phase1_agents"]
+
+    # Build slim context only for agents that ran
+    slim_data = {}
+    for agent_name in active_agents:
+        if agent_name in PHASE1_SLIM_FNS:
+            key, slim_fn = PHASE1_SLIM_FNS[agent_name]
+            slim_data[key] = slim_fn(state.get(agent_name))
+
+    phase1_context = compact(slim_data)
 
     # Smart Aggregator: extract cross-pollination signals via one LLM call
     settled_claims = []
@@ -212,13 +246,15 @@ def phase1_aggregator(state: DueDiligenceState) -> dict:
         import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         lang = state.get("language", "English")
+        n_agents = len(active_agents)
         resp = client.messages.create(
             model=MODEL_NAME,
             max_tokens=2000,
             messages=[{
                 "role": "user",
                 "content": (
-                    f"You are analyzing 6 due diligence research agents' outputs for {state.get('company_name', 'a company')}.\n"
+                    f"You are analyzing {n_agents} due diligence research agents' outputs for {state.get('company_name', 'a company')}.\n"
+                    f"Analysis mode: {mode}\n"
                     f"Respond in {lang}. Output ONLY valid JSON with exactly 3 keys.\n\n"
                     f"Phase 1 agent results:\n{phase1_context[:8000]}\n\n"
                     "Extract:\n"
@@ -255,16 +291,18 @@ def phase1_aggregator(state: DueDiligenceState) -> dict:
 
 
 def phase2_parallel(state: DueDiligenceState) -> dict:
-    """Run ra_synthesis + risk_assessment concurrently."""
-    agent_names = ["ra_synthesis", "risk_assessment"]
-    agent_fns = [ra_synthesis.run, risk_assessment.run]
+    """Run Phase 2 parallel agents (dynamic per mode)."""
+    mode = state.get("mode", "due-diligence")
+    cfg = MODE_REGISTRY[mode]
+    agent_names = cfg["phase2_parallel"]
+    agent_fns = [PHASE2_AGENT_FNS[name] for name in agent_names]
 
     merged: dict[str, Any] = {}
     errors = []
     agent_usage: dict[str, dict] = {}
 
     future_to_name: dict = {}
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=max(len(agent_fns), 1)) as executor:
         for i, (fn, name) in enumerate(zip(agent_fns, agent_names)):
             if i > 0:
                 _time.sleep(3)
@@ -366,18 +404,8 @@ def selective_rerun(state: DueDiligenceState) -> dict:
                     f"Improvements needed: {'; '.join(improvements)}"
                 )
 
-    # Map agent names to run functions
-    agent_map = {
-        "market_analysis": market_analysis.run,
-        "competitor_analysis": competitor_analysis.run,
-        "financial_analysis": financial_analysis.run,
-        "tech_analysis": tech_analysis.run,
-        "legal_regulatory": legal_regulatory.run,
-        "team_analysis": team_analysis.run,
-        "ra_synthesis": ra_synthesis.run,
-        "risk_assessment": risk_assessment.run,
-        "strategic_insight": strategic_insight.run,
-    }
+    # Map agent names to run functions (all phases)
+    agent_map = {**PHASE1_AGENT_FNS, **PHASE2_AGENT_FNS}
 
     merged: dict[str, Any] = {
         "feedback_loop_count": loop_count,
@@ -404,75 +432,134 @@ def phase1_restart(state: DueDiligenceState) -> dict:
     """Full Phase 1 restart — clear outputs and increment loop count."""
     loop_count = state.get("feedback_loop_count", 0) + 1
     log.info("Phase 1 restart (loop %d)", loop_count)
-    return {
+
+    # Clear all Phase 1 + Phase 2 outputs
+    cleared: dict[str, Any] = {
         "feedback_loop_count": loop_count,
-        "market_analysis": None,
-        "competitor_analysis": None,
-        "financial_analysis": None,
-        "tech_analysis": None,
-        "legal_regulatory": None,
-        "team_analysis": None,
-        "ra_synthesis": None,
-        "risk_assessment": None,
-        "strategic_insight": None,
+        "weak_sections": [],
+        "phase1_context": None,
         "review_result": None,
         "critique_result": None,
-        "phase1_context": None,
-        "weak_sections": [],
     }
+
+    # Clear Phase 1 agent outputs for current mode
+    mode = state.get("mode", "due-diligence")
+    cfg = MODE_REGISTRY[mode]
+    for agent_name in cfg["phase1_agents"]:
+        cleared[agent_name] = None
+    for agent_name in cfg["phase2_parallel"] + cfg.get("phase2_sequential", []):
+        cleared[agent_name] = None
+
+    return cleared
 
 
 # ── Graph builder ─────────────────────────────────────────────────────────────
 
-def build_graph(use_checkpointing: bool = True):
-    """Build and compile the LangGraph StateGraph."""
+def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
+    """Build and compile a mode-specific LangGraph StateGraph.
+
+    The graph topology varies by mode:
+      - due-diligence:     full pipeline with strategic_insight, feedback loop, dd_questions
+      - industry-research: lighter pipeline, industry_synthesis, no loop
+      - deep-dive:         ra+risk synthesis, feedback loop, no recommendation
+      - benchmark:         benchmark_synthesis, no loop
+    """
+    if mode not in MODE_REGISTRY:
+        raise ValueError(f"Unknown mode '{mode}'. Valid: {list(MODE_REGISTRY.keys())}")
+
+    cfg = MODE_REGISTRY[mode]
     builder = StateGraph(DueDiligenceState)
 
-    # Register nodes
+    phase3_agents = cfg["phase3_agents"]
+    has_review = "review_agent" in phase3_agents
+    has_critique = "critique_agent" in phase3_agents
+    has_dd_q = "dd_questions" in phase3_agents
+    has_loop = cfg["has_feedback_loop"]
+    has_strategic = bool(cfg["phase2_sequential"])
+
+    # ── Nodes always present ──────────────────────────────────────────────
     builder.add_node("input_processor",    input_processor)
     builder.add_node("phase1_parallel",    phase1_parallel)
     builder.add_node("phase1_aggregator",  phase1_aggregator)
     builder.add_node("phase2_parallel",    phase2_parallel)
-    builder.add_node("strategic_insight",  strategic_insight_node)
     builder.add_node("phase2_aggregator",  phase2_aggregator)
-    builder.add_node("review_agent",       review_agent_node)
-    builder.add_node("critique_agent",     critique_agent_node)
-    builder.add_node("selective_rerun",    selective_rerun)
-    builder.add_node("phase1_restart",     phase1_restart)
-    builder.add_node("dd_questions",       dd_questions_node)
     builder.add_node("report_structure",   report_structure_node)
     builder.add_node("report_writer",      report_writer_node)
 
-    # Main pipeline edges
+    # ── Phase 1 edges (always the same) ───────────────────────────────────
     builder.add_edge(START,                "input_processor")
     builder.add_edge("input_processor",    "phase1_parallel")
     builder.add_edge("phase1_parallel",    "phase1_aggregator")
     builder.add_edge("phase1_aggregator",  "phase2_parallel")
-    builder.add_edge("phase2_parallel",    "strategic_insight")
-    builder.add_edge("strategic_insight",  "phase2_aggregator")
-    builder.add_edge("phase2_aggregator",  "review_agent")
-    builder.add_edge("review_agent",       "critique_agent")
 
-    # Conditional edge from critique_agent
-    builder.add_conditional_edges(
-        "critique_agent",
-        critique_router,
-        {
-            "pass":        "dd_questions",
-            "conditional": "selective_rerun",
-            "fail":        "phase1_restart",
-        },
-    )
+    # ── Phase 2 sequential (strategic_insight) ────────────────────────────
+    if has_strategic:
+        builder.add_node("strategic_insight", strategic_insight_node)
+        builder.add_edge("phase2_parallel",   "strategic_insight")
+        builder.add_edge("strategic_insight",  "phase2_aggregator")
+    else:
+        builder.add_edge("phase2_parallel",    "phase2_aggregator")
 
-    # Feedback loop edges
-    builder.add_edge("selective_rerun",    "review_agent")
-    builder.add_edge("phase1_restart",     "phase1_parallel")
+    # ── Phase 3 — dynamic chain from phase2_aggregator to report_structure ─
+    prev_node = "phase2_aggregator"
 
-    # Forward path after passing critique
-    builder.add_edge("dd_questions",       "report_structure")
-    builder.add_edge("report_structure",   "report_writer")
-    builder.add_edge("report_writer",      END)
+    if has_review:
+        builder.add_node("review_agent", review_agent_node)
+        builder.add_edge(prev_node, "review_agent")
+        prev_node = "review_agent"
 
+    if has_critique:
+        builder.add_node("critique_agent", critique_agent_node)
+        builder.add_edge(prev_node, "critique_agent")
+
+        if has_loop:
+            # Feedback loop: critique → router → {pass, conditional, fail}
+            builder.add_node("selective_rerun", selective_rerun)
+            builder.add_node("phase1_restart",  phase1_restart)
+
+            pass_target = "dd_questions" if has_dd_q else "report_structure"
+            if has_dd_q:
+                builder.add_node("dd_questions", dd_questions_node)
+
+            builder.add_conditional_edges(
+                "critique_agent",
+                critique_router,
+                {
+                    "pass":        pass_target,
+                    "conditional": "selective_rerun",
+                    "fail":        "phase1_restart",
+                },
+            )
+
+            # Loop-back edges
+            loop_target = "review_agent" if has_review else "critique_agent"
+            builder.add_edge("selective_rerun", loop_target)
+            builder.add_edge("phase1_restart",  "phase1_parallel")
+
+            if has_dd_q:
+                builder.add_edge("dd_questions", "report_structure")
+        else:
+            # No feedback loop — straight through
+            if has_dd_q:
+                builder.add_node("dd_questions", dd_questions_node)
+                builder.add_edge("critique_agent", "dd_questions")
+                builder.add_edge("dd_questions",   "report_structure")
+            else:
+                builder.add_edge("critique_agent", "report_structure")
+    else:
+        # No critique agent
+        if has_dd_q:
+            builder.add_node("dd_questions", dd_questions_node)
+            builder.add_edge(prev_node,    "dd_questions")
+            builder.add_edge("dd_questions", "report_structure")
+        else:
+            builder.add_edge(prev_node, "report_structure")
+
+    # ── Phase 4 (always the same) ─────────────────────────────────────────
+    builder.add_edge("report_structure", "report_writer")
+    builder.add_edge("report_writer",    END)
+
+    # ── Compile ───────────────────────────────────────────────────────────
     if use_checkpointing:
         checkpointer = SqliteSaver.from_conn_string(CHECKPOINT_DB_PATH)
         return builder.compile(checkpointer=checkpointer)

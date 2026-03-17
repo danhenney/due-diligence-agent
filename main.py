@@ -13,7 +13,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-from config import REPORTS_DIR, validate_config
+from config import REPORTS_DIR, VALID_MODES, validate_config
 
 app = typer.Typer(
     name="due-diligence",
@@ -33,6 +33,8 @@ RECOMMENDATION_COLORS = {
 def main(
     company: str = typer.Option(..., "--company", "-c", help="Company name to analyze."),
     url: str | None = typer.Option(None, "--url", "-u", help="Company website URL."),
+    mode: str = typer.Option("due-diligence", "--mode", "-m", help=f"Analysis mode: {', '.join(VALID_MODES)}"),
+    vs: str | None = typer.Option(None, "--vs", help="Benchmark comparison target (benchmark mode only)."),
     docs: list[str] = typer.Option(
         [], "--docs", "-d", help="Path(s) to uploaded PDF documents.", show_default=False
     ),
@@ -44,6 +46,14 @@ def main(
     ),
 ):
     """Run full multi-agent due diligence on a company."""
+    # ── Mode validation ───────────────────────────────────────────────────
+    if mode not in VALID_MODES:
+        console.print(f"[red]Error:[/red] Invalid mode '{mode}'. Valid: {', '.join(VALID_MODES)}")
+        raise typer.Exit(code=1)
+    if mode == "benchmark" and not vs:
+        console.print("[red]Error:[/red] --vs is required for benchmark mode.")
+        raise typer.Exit(code=1)
+
     # ── Config validation ──────────────────────────────────────────────────
     missing = validate_config()
     if missing:
@@ -70,6 +80,9 @@ def main(
         "uploaded_docs": valid_docs,
         "is_public": False if private else None,   # None = auto-detect
         "ticker": None,
+        # Mode
+        "mode": mode,
+        "vs_company": vs,
         # Phase 1
         "market_analysis": None,
         "competitor_analysis": None,
@@ -81,6 +94,8 @@ def main(
         "ra_synthesis": None,
         "risk_assessment": None,
         "strategic_insight": None,
+        "industry_synthesis": None,
+        "benchmark_synthesis": None,
         # Phase 3
         "review_result": None,
         "critique_result": None,
@@ -89,6 +104,10 @@ def main(
         "report_structure": None,
         "final_report": None,
         "recommendation": None,
+        # Cross-pollination
+        "settled_claims": None,
+        "phase1_tensions": None,
+        "phase1_gaps": None,
         # Feedback loop
         "phase1_context": None,
         "feedback_loop_count": 0,
@@ -102,12 +121,23 @@ def main(
 
     run_id = thread_id or str(uuid.uuid4())
 
+    _MODE_TITLES = {
+        "due-diligence": "Multi-Agent Investment Analysis",
+        "industry-research": "Industry Research Analysis",
+        "deep-dive": "Deep Dive Analysis",
+        "benchmark": "Benchmark Comparison",
+    }
+    title = _MODE_TITLES.get(mode, "Analysis")
+    subtitle = f"[bold]{title}:[/bold] {company}"
+    if mode == "benchmark" and vs:
+        subtitle += f" vs {vs}"
+
     console.print()
     console.print(
         Panel.fit(
-            f"[bold]Due Diligence:[/bold] {company}\n"
-            f"[dim]Thread ID: {run_id}[/dim]",
-            title="[bold blue]Multi-Agent Investment Analysis[/bold blue]",
+            f"{subtitle}\n"
+            f"[dim]Mode: {mode} | Thread ID: {run_id}[/dim]",
+            title=f"[bold blue]{title}[/bold blue]",
             border_style="blue",
         )
     )
@@ -116,7 +146,7 @@ def main(
     # ── Import graph (deferred to avoid slow startup) ──────────────────────
     from graph.workflow import build_graph
 
-    graph = build_graph(use_checkpointing=not no_checkpoint)
+    graph = build_graph(mode=mode, use_checkpointing=not no_checkpoint)
     config = {"configurable": {"thread_id": run_id}}
 
     # ── Run the graph with progress display ───────────────────────────────
@@ -167,19 +197,26 @@ def main(
         raise typer.Exit(code=1)
 
     # ── Retrieve the final recommendation ─────────────────────────────────
-    recommendation = final_state.get("recommendation", "WATCH")
-    rec_color = RECOMMENDATION_COLORS.get(recommendation, "white")
+    from config import MODE_REGISTRY as _MR
+    has_rec = _MR.get(mode, {}).get("has_recommendation", False)
+    recommendation = final_state.get("recommendation")
     final_memo = final_state.get("final_report", "")
 
-    console.print()
-    console.print(
-        Panel.fit(
-            f"[bold {rec_color}]{recommendation}[/bold {rec_color}]",
-            title="[bold]Final Recommendation[/bold]",
-            border_style=rec_color,
+    if has_rec and recommendation:
+        rec_color = RECOMMENDATION_COLORS.get(recommendation, "white")
+        console.print()
+        console.print(
+            Panel.fit(
+                f"[bold {rec_color}]{recommendation}[/bold {rec_color}]",
+                title="[bold]Final Recommendation[/bold]",
+                border_style=rec_color,
+            )
         )
-    )
-    console.print()
+        console.print()
+    else:
+        console.print()
+        console.print(Panel.fit("[bold]Analysis Complete[/bold]", border_style="green"))
+        console.print()
 
     # ── Print errors if any ────────────────────────────────────────────────
     errors = final_state.get("errors", [])
