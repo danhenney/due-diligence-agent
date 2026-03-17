@@ -629,25 +629,49 @@ def _parse_markdown(md: str, styles: dict[str, ParagraphStyle],
 
 def _build_cover(company: str, recommendation: str, styles: dict,
                  page_width: float, page_height: float,
-                 language: str = "English") -> list:
-    """Build a dark navy cover page matching the reference design."""
-    rec = (recommendation or "WATCH").upper()
+                 language: str = "English",
+                 mode: str = "due-diligence") -> list:
+    """Build a dark navy cover page matching the reference design. Mode-adaptive."""
+    rec = (recommendation or "").upper()
 
-    rec_labels_en = {
-        "INVEST": "INVEST",
-        "WATCH": "CONDITIONAL PROCEED",
-        "PASS": "PASS",
+    # Mode-specific cover title
+    _COVER_TITLES: dict[str, str] = {
+        "due-diligence": "DUE DILIGENCE REPORT",
+        "industry-research": "INDUSTRY RESEARCH REPORT",
+        "deep-dive": "DEEP DIVE ANALYSIS",
+        "benchmark": "BENCHMARK COMPARISON",
     }
-    rec_labels_ko = {
-        "INVEST": "INVEST",
-        "WATCH": "CONDITIONAL PROCEED",
-        "PASS": "PASS",
-    }
-    rec_labels = rec_labels_ko if language.lower() == "korean" else rec_labels_en
-    rec_label = rec_labels.get(rec, rec)
+    title_label = _COVER_TITLES.get(mode, _COVER_TITLES["due-diligence"])
 
-    title_label = "DUE DILIGENCE REPORT"
-    subtitle = "투자 검토 보고서" if language.lower() == "korean" else "Investment Due Diligence"
+    # Mode-specific subtitle
+    _SUBTITLES_KO: dict[str, str] = {
+        "due-diligence": "투자 검토 보고서",
+        "industry-research": "산업 구조 및 트렌드 분석",
+        "deep-dive": "기업 심층 분석 보고서",
+        "benchmark": "경쟁 벤치마크 분석",
+    }
+    _SUBTITLES_EN: dict[str, str] = {
+        "due-diligence": "Investment Due Diligence",
+        "industry-research": "Industry Structure &amp; Trend Analysis",
+        "deep-dive": "Comprehensive Company Analysis",
+        "benchmark": "Competitive Benchmark Analysis",
+    }
+    subtitles = _SUBTITLES_KO if language.lower() == "korean" else _SUBTITLES_EN
+    subtitle = subtitles.get(mode, subtitles["due-diligence"])
+
+    # Mode-specific recommendation/assessment badge labels
+    _REC_LABELS: dict[str, dict[str, str]] = {
+        "due-diligence": {"INVEST": "INVEST", "WATCH": "CONDITIONAL PROCEED", "PASS": "PASS"},
+        "industry-research": {"HIGH": "HIGH ATTRACTIVENESS", "MEDIUM": "MEDIUM ATTRACTIVENESS", "LOW": "LOW ATTRACTIVENESS"},
+        "deep-dive": {},  # no badge for deep-dive
+        "benchmark": {"LEADING": "LEADING", "ON_PAR": "ON PAR", "LAGGING": "LAGGING"},
+    }
+    mode_labels = _REC_LABELS.get(mode, _REC_LABELS["due-diligence"])
+    rec_label = mode_labels.get(rec, rec) if rec else ""
+
+    # Default recommendation for due-diligence if empty
+    if not rec_label and mode == "due-diligence":
+        rec_label = "CONDITIONAL PROCEED"
 
     from reportlab.platypus import NextPageTemplate
 
@@ -655,7 +679,7 @@ def _build_cover(company: str, recommendation: str, styles: dict,
 
     flowables.append(Spacer(1, 2.2 * inch))
 
-    # "DUE DILIGENCE REPORT" label
+    # Cover title label
     flowables.append(_safe_para(
         f'<font letterSpacing="4">{title_label}</font>',
         styles["CoverLabel"],
@@ -675,19 +699,27 @@ def _build_cover(company: str, recommendation: str, styles: dict,
     ))
     flowables.append(Spacer(1, 0.5 * inch))
 
-    # Recommendation badge (white bg box)
-    badge_style = ParagraphStyle(
-        "CoverBadgeDyn",
-        parent=styles["CoverBadge"],
-        backColor=colors.HexColor("#f7f8fa"),
-        borderPad=14,
-        textColor=COLOR_BODY_TEXT,
-    )
-    flowables.append(_safe_para(rec_label, badge_style))
+    # Recommendation / assessment badge (skip if empty, e.g. deep-dive)
+    if rec_label:
+        badge_style = ParagraphStyle(
+            "CoverBadgeDyn",
+            parent=styles["CoverBadge"],
+            backColor=colors.HexColor("#f7f8fa"),
+            borderPad=14,
+            textColor=COLOR_BODY_TEXT,
+        )
+        flowables.append(_safe_para(rec_label, badge_style))
 
     flowables.append(Spacer(1, 0.8 * inch))
 
     # Metadata row: DATE | CLASSIFICATION | TYPE
+    _TYPE_LABELS: dict[str, str] = {
+        "due-diligence": "Desk Research DD",
+        "industry-research": "Industry Research",
+        "deep-dive": "Deep Dive Analysis",
+        "benchmark": "Benchmark Comparison",
+    }
+    type_label = _TYPE_LABELS.get(mode, "Analysis")
     now = datetime.now()
     date_str = now.strftime("%Y. %m. %d")
     meta_text = (
@@ -695,7 +727,7 @@ def _build_cover(company: str, recommendation: str, styles: dict,
         f'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
         f'<font size="8" color="#8a9ab5">CLASSIFICATION</font><br/>Confidential'
         f'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
-        f'<font size="8" color="#8a9ab5">TYPE</font><br/>Desk Research DD'
+        f'<font size="8" color="#8a9ab5">TYPE</font><br/>{type_label}'
     )
     flowables.append(_safe_para(meta_text, styles["CoverMeta"]))
 
@@ -732,16 +764,31 @@ def _build_cover(company: str, recommendation: str, styles: dict,
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
+def _doc_title(mode: str) -> str:
+    """Return human-readable document title for PDF metadata."""
+    return {
+        "due-diligence": "Due Diligence",
+        "industry-research": "Industry Research",
+        "deep-dive": "Deep Dive Analysis",
+        "benchmark": "Benchmark Comparison",
+    }.get(mode, "Analysis")
+
+
 def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = None) -> str:
-    """Generate a PDF report from the completed due diligence state."""
+    """Generate a PDF report from the completed analysis state."""
     reports_dir = Path(output_dir) if output_dir else Path("reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
     output_path = str(reports_dir / f"{job_id}.pdf")
 
     company = state.get("company_name") or "Unknown Company"
-    recommendation = state.get("recommendation") or "WATCH"
+    recommendation = state.get("recommendation") or ""
     final_report_md = state.get("final_report") or ""
     language = state.get("language", "English")
+    mode = state.get("mode", "due-diligence")
+
+    # Default recommendation for due-diligence if not set
+    if not recommendation and mode == "due-diligence":
+        recommendation = "WATCH"
 
     if language.lower() == "korean":
         font_regular, font_bold = _setup_korean_fonts()
@@ -751,6 +798,7 @@ def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = No
     styles = _build_styles(font_regular, font_bold)
 
     page_size = A4
+    doc_title = _doc_title(mode)
     doc = _BookmarkDocTemplate(
         output_path,
         pagesize=page_size,
@@ -758,9 +806,9 @@ def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = No
         rightMargin=0.9 * inch,
         topMargin=0.9 * inch,
         bottomMargin=0.9 * inch,
-        title=f"Due Diligence — {company}",
-        author="Due Diligence Agent",
-        subject=f"Investment recommendation: {recommendation}",
+        title=f"{doc_title} — {company}",
+        author="DD Agent",
+        subject=f"{doc_title}: {recommendation}" if recommendation else doc_title,
         font_regular=font_regular,
         font_bold=font_bold,
     )
@@ -785,7 +833,7 @@ def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = No
     # Cover page
     story.extend(_build_cover(
         company, recommendation, styles,
-        page_size[0], page_size[1], language,
+        page_size[0], page_size[1], language, mode,
     ))
 
     # Body: parse markdown report
