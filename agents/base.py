@@ -149,9 +149,10 @@ def run_agent(
             hierarchy_parts.append("SEC 10-K/10-Q (get_sec_filings) for US companies")
         if hierarchy_parts:
             rules.append(
-                "SOURCE HIERARCHY: " + " / ".join(hierarchy_parts)
-                + " > uploaded documents (exact figures) > public data (KOSIS/KIPRIS/FRED) > yfinance > web search. "
-                "Official filings always win on conflict."
+                "SOURCE HIERARCHY: uploaded documents (exact figures) > "
+                + " / ".join(hierarchy_parts)
+                + " > public data (KOSIS/KIPRIS/FRED) > yfinance > web search. "
+                "Official filings always win on conflict with web data."
             )
 
         if has_pdf:
