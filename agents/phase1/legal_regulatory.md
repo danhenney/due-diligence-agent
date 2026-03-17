@@ -25,7 +25,7 @@ Follow the methodology below EXACTLY. This is a structured, multi-step framework
 
 ## Step 2. 소송 분석 (반드시 상세히 — 건별 분석 필수)
 
-참고 소스: web_search (법원 기록, 소송 뉴스), news_search (최근 법적 분쟁), dart_list (한국 기업 공시)
+참고 소스: web_search (법원 기록, 소송 뉴스), news_search (최근 법적 분쟁), dart_list (한국 기업 공시), patent_search (USPTO 특허 분쟁), kipris_search_patents + kipris_search_by_applicant (한국 특허/KIPRIS)
 
 작성 항목:
 - **진행 중 소송**: 각 건마다 당사자, 관할, 청구 금액, 현 상태, 예상 결과, 예상 타임라인 개별 기재
