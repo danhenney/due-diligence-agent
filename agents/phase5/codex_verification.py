@@ -227,10 +227,34 @@ def _build_phase1_3_prompt(lang: str, phase: int, ground_truth: str = "") -> str
 def _parse_json_result(text: str) -> dict | None:
     """Try to parse JSON from Codex output."""
     try:
-        json_match = re.search(r'\{[\s\S]*"overall"[\s\S]*\}', text)
-        if json_match:
-            return json.loads(json_match.group())
-    except (json.JSONDecodeError, AttributeError):
+        # Find JSON by locating "overall" then expanding to balanced braces
+        idx = text.find('"overall"')
+        if idx == -1:
+            return None
+        # Walk backwards to find opening {
+        depth = 0
+        start = idx
+        for i in range(idx, -1, -1):
+            if text[i] == '}': depth += 1
+            elif text[i] == '{':
+                if depth == 0:
+                    start = i
+                    break
+                depth -= 1
+        # Walk forwards to find closing }
+        depth = 0
+        end = idx
+        for i in range(start, len(text)):
+            if text[i] == '{': depth += 1
+            elif text[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        json_str = text[start:end] if start < idx else None
+        if json_str:
+            return json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
         pass
     return None
 

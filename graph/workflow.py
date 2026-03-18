@@ -278,26 +278,28 @@ def phase1_cross_check_node(state: DueDiligenceState) -> dict:
 
 def adaptive_phase2_context_node(state: DueDiligenceState) -> dict:
     """D2: Build adaptive context for Phase 2 based on Phase 1 results."""
-    aggregator = state.get("aggregator_output") or {}
+    # State fields from phase1_aggregator: phase1_tensions, phase1_gaps
+    tensions = state.get("phase1_tensions") or []
+    gaps = state.get("phase1_gaps") or []
     pre_tensions = state.get("pre_tensions") or []
 
     supplements = []
 
     # Inject tensions for resolution
-    tensions = aggregator.get("tensions", [])
     if tensions:
+        tension_items = tensions if isinstance(tensions, list) else [tensions]
         supplements.append(
             "## Tensions from Phase 1 (반드시 해소할 것)\n"
-            + "\n".join(f"- {t}" for t in tensions[:10])
+            + "\n".join(f"- {t}" for t in tension_items[:10])
             + "\n각 tension에 대해: (a) 어느 쪽이 맞는지 판정, (b) 근거, (c) 판정 불가 시 양쪽 시나리오 제시"
         )
 
     # Inject gaps for deeper analysis
-    gaps = aggregator.get("gaps", [])
     if gaps:
+        gap_items = gaps if isinstance(gaps, list) else [gaps]
         supplements.append(
             "## Critical Gaps from Phase 1 (보강 분석 필요)\n"
-            + "\n".join(f"- {g}" for g in gaps[:10])
+            + "\n".join(f"- {g}" for g in gap_items[:10])
         )
 
     # Pre-tension numeric discrepancies
