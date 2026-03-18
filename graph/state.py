@@ -48,6 +48,7 @@ class DueDiligenceState(TypedDict):
     verification_phase2: dict | None   # codex check after Phase 2
     verification_phase3: dict | None   # codex check after Phase 3
     verification_result: dict | None   # codex final check after Phase 4
+    red_team_result: dict | None       # red team counter-argument verification
     codex_retry_count: int             # per-phase retry tracker (resets each phase)
 
     # ── Cross-pollination (Smart Aggregator output) ───────────────────────

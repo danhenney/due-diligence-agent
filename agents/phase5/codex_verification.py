@@ -493,4 +493,61 @@ def run_final(state: dict) -> dict:
     if result.get("overall") == "FAIL" and result.get("status") == "completed":
         result = _recheck_false_positives(content, result, company, lang)
 
-    return {"verification_result": result}
+    # Red Team verification (#3)
+    red_team = _run_red_team(content, company, lang)
+
+    return {"verification_result": result, "red_team_result": red_team}
+
+
+# ── Red Team verification (#3) ──────────────────────────────────────────────
+
+_RED_TEAM_PROMPT = (
+    "Read the file phase_output.md. The report recommends {recommendation}.\n\n"
+    "Your job: Write the OPPOSITE recommendation using ONLY the data already in the report. "
+    "Do NOT invent new data. Use the report's own numbers, risks, and analysis to argue "
+    "for the opposite conclusion.\n\n"
+    "Output JSON only:\n"
+    '{{"original_recommendation": "{recommendation}", '
+    '"counter_recommendation": "...", '
+    '"counter_arguments": [{{"argument": "...", "supporting_data_from_report": "..."}}], '
+    '"strength": "weak|moderate|strong", '
+    '"verdict": "CONFIRMED|CHALLENGED", '
+    '"explanation": "..."}}\n\n'
+    "strength=strong means counter is MORE convincing than original. "
+    "verdict=CONFIRMED means original holds. verdict=CHALLENGED means data supports opposite. "
+    "Reply in {lang}."
+)
+
+
+def _extract_recommendation(content: str) -> str:
+    """Extract INVEST/WATCH/PASS recommendation from report."""
+    for pattern in [
+        r'(?:투자\s*판정|권고|recommendation)[^\w]*?(INVEST|WATCH|PASS)',
+        r'\*\*(INVEST|WATCH|PASS)\*\*',
+        r'(INVEST|WATCH|PASS)\s*[|｜]',
+    ]:
+        m = re.search(pattern, content, re.IGNORECASE)
+        if m:
+            return m.group(1).upper()
+    return "WATCH"  # default
+
+
+def _run_red_team(content: str, company: str, lang: str) -> dict:
+    """Run red team verification — argue for opposite recommendation."""
+    recommendation = _extract_recommendation(content)
+    prompt = _RED_TEAM_PROMPT.format(recommendation=recommendation, lang=lang)
+
+    log.info("[red-team] Running counter-argument for %s recommendation", recommendation)
+    result = _run_codex(content, prompt, company, "red_team", model=CODEX_MODEL_PHASE4)
+
+    if result.get("status") != "completed":
+        log.warning("[red-team] Failed, skipping")
+        return {"status": "skipped", "verdict": "CONFIRMED"}
+
+    data = _parse_json_result(result.get("content", ""))
+    if data:
+        log.info("[red-team] Verdict: %s, Strength: %s",
+                 data.get("verdict"), data.get("strength"))
+        return {**result, **data}
+
+    return {**result, "verdict": "CONFIRMED", "strength": "unknown"}
