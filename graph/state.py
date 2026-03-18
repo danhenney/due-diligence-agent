@@ -55,6 +55,10 @@ class DueDiligenceState(TypedDict):
     phase1_tensions: list[str] | None # contradictions between Phase 1 agents
     phase1_gaps: list[str] | None     # important questions no agent answered
 
+    # ── D1/D2: Cross-check & Adaptive Phase 2 ─────────────────────────────
+    pre_tensions: list[dict] | None   # numeric discrepancies found by phase1_cross_check
+    phase2_supplements: str | None    # adaptive context injected into Phase 2 agents
+
     # ── Feedback loop ─────────────────────────────────────────────────────
     phase1_context: str | None        # compact Phase 1 summary, built once
     feedback_loop_count: int          # starts 0, max 2

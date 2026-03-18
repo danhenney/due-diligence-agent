@@ -241,6 +241,77 @@ def phase1_parallel(state: DueDiligenceState) -> dict:
     return merged
 
 
+def phase1_cross_check_node(state: DueDiligenceState) -> dict:
+    """D1: Cross-check numeric values across Phase 1 agents before aggregation."""
+    import re
+    import json
+
+    patterns = {
+        'revenue': r'(?:매출|revenue)[^\d]*?([\d,]+(?:\.\d+)?)\s*(?:억|백만|B|M)',
+        'employees': r'(?:직원|임직원|employee)[^\d]*?([\d,]+)',
+        'market_cap': r'(?:시가총액|market.?cap)[^\d]*?([\d,]+(?:\.\d+)?)',
+        'growth': r'(?:성장률|growth)[^\d]*?([\d.]+)\s*%',
+    }
+
+    agent_keys = ["market_analysis", "competitor_analysis", "financial_analysis",
+                  "tech_analysis", "legal_regulatory", "team_analysis"]
+
+    numbers = {}
+    for agent in agent_keys:
+        data = state.get(agent)
+        if not data:
+            continue
+        text = json.dumps(data, ensure_ascii=False, default=str) if isinstance(data, dict) else str(data)
+        for metric, pat in patterns.items():
+            matches = re.findall(pat, text, re.IGNORECASE)
+            if matches:
+                numbers.setdefault(metric, {})[agent] = matches[0]
+
+    tensions = []
+    for metric, agent_vals in numbers.items():
+        if len(agent_vals) >= 2 and len(set(agent_vals.values())) > 1:
+            tensions.append({"metric": metric, "values": agent_vals})
+
+    log.info("[cross-check] Found %d pre-aggregator tensions", len(tensions))
+    return {"pre_tensions": tensions}
+
+
+def adaptive_phase2_context_node(state: DueDiligenceState) -> dict:
+    """D2: Build adaptive context for Phase 2 based on Phase 1 results."""
+    aggregator = state.get("aggregator_output") or {}
+    pre_tensions = state.get("pre_tensions") or []
+
+    supplements = []
+
+    # Inject tensions for resolution
+    tensions = aggregator.get("tensions", [])
+    if tensions:
+        supplements.append(
+            "## Tensions from Phase 1 (반드시 해소할 것)\n"
+            + "\n".join(f"- {t}" for t in tensions[:10])
+            + "\n각 tension에 대해: (a) 어느 쪽이 맞는지 판정, (b) 근거, (c) 판정 불가 시 양쪽 시나리오 제시"
+        )
+
+    # Inject gaps for deeper analysis
+    gaps = aggregator.get("gaps", [])
+    if gaps:
+        supplements.append(
+            "## Critical Gaps from Phase 1 (보강 분석 필요)\n"
+            + "\n".join(f"- {g}" for g in gaps[:10])
+        )
+
+    # Pre-tension numeric discrepancies
+    if pre_tensions:
+        supplements.append(
+            "## Numeric Discrepancies (코드 기반 사전 탐지)\n"
+            + "\n".join(f"- {t['metric']}: {t['values']}" for t in pre_tensions[:5])
+        )
+
+    phase2_context = "\n\n".join(supplements) if supplements else ""
+    log.info("[adaptive-phase2] Built %d supplement sections", len(supplements))
+    return {"phase2_supplements": phase2_context}
+
+
 def phase1_aggregator(state: DueDiligenceState) -> dict:
     """Build compact Phase 1 context + extract settled claims and tensions.
 
@@ -573,7 +644,9 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
     # ── Nodes always present ──────────────────────────────────────────────
     builder.add_node("input_processor",    input_processor)
     builder.add_node("phase1_parallel",    phase1_parallel)
+    builder.add_node("phase1_cross_check", phase1_cross_check_node)
     builder.add_node("phase1_aggregator",  phase1_aggregator)
+    builder.add_node("adaptive_phase2_context", adaptive_phase2_context_node)
     builder.add_node("phase2_parallel",    phase2_parallel)
     builder.add_node("phase2_aggregator",  phase2_aggregator)
     builder.add_node("report_structure",   report_structure_node)
@@ -594,7 +667,8 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
     # ── Phase 1 edges ────────────────────────────────────────────────────
     builder.add_edge(START,                "input_processor")
     builder.add_edge("input_processor",    "phase1_parallel")
-    builder.add_edge("phase1_parallel",    "phase1_aggregator")
+    builder.add_edge("phase1_parallel",    "phase1_cross_check")
+    builder.add_edge("phase1_cross_check", "phase1_aggregator")
     builder.add_edge("phase1_aggregator",  "codex_verify_phase1")
 
     builder.add_conditional_edges(
@@ -602,7 +676,8 @@ def build_graph(mode: str = "due-diligence", use_checkpointing: bool = True):
         _codex_router("verification_phase1"),
         {"pass": "checkpoint_phase1", "fail": "phase1_parallel"},
     )
-    builder.add_edge("checkpoint_phase1", "phase2_parallel")
+    builder.add_edge("checkpoint_phase1", "adaptive_phase2_context")
+    builder.add_edge("adaptive_phase2_context", "phase2_parallel")
 
     # ── Phase 2 sequential (strategic_insight) ────────────────────────────
     if has_strategic:

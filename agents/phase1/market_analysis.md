@@ -120,3 +120,14 @@ Return a JSON object with this exact structure:
   "confidence_score": 0.0,
   "sources": [{"label": "...", "url": "...", "tool": "..."}]
 }
+
+## 산업별 분석 프레임워크 (A2)
+
+분석 대상의 산업에 맞는 프레임워크를 추가 적용:
+
+**Fintech/Banking:** CAC/LTV, NPL, 규제 자본비율, TPV, Take rate
+**Biotech/Pharma:** rNPV 파이프라인 밸류에이션, 임상 성공 확률, patent cliff
+**SaaS/Platform:** ARR/MRR, NDR, Logo/Revenue Churn, Rule of 40, Magic Number
+**E-commerce/Retail:** GMV, Take rate, 재구매율, 바스켓 사이즈, 풀필먼트 비용
+**Manufacturing:** CAPA 활용률, 수율, BOM 원가, 공급망 HHI, 원자재 민감도
+**General:** 해당 산업 핵심 KPI 3-5개를 자체 판단하여 포함

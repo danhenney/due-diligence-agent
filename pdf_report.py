@@ -1,12 +1,15 @@
 """ReportLab PDF report generator — institutional-grade styling."""
 from __future__ import annotations
 
+import logging
 import os
 import re
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
@@ -25,6 +28,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 from reportlab.platypus.flowables import Flowable
+from reportlab.platypus import Image as RLImage
 
 # ── Colors (reference palette) ───────────────────────────────────────────────
 COLOR_NAVY = colors.HexColor("#1e293b")         # dark navy cover / accents
@@ -762,6 +766,86 @@ def _build_cover(company: str, recommendation: str, styles: dict,
     return flowables
 
 
+# ── Chart generation (C2, C4) ────────────────────────────────────────────────
+
+def _generate_charts(report_text: str, output_dir: str) -> list[str]:
+    """Generate charts from report data. Returns list of chart paths."""
+    charts = []
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        for font_name in ['Malgun Gothic', 'NanumGothic', 'AppleGothic', 'sans-serif']:
+            try:
+                plt.rcParams['font.family'] = font_name
+                break
+            except Exception:
+                continue
+        plt.rcParams['axes.unicode_minus'] = False
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 1. Revenue trend
+        revenue_years = re.findall(
+            r'(20\d{2})[^\d]*?(?:매출|revenue)[^\d]*?([\d,]+(?:\.\d+)?)\s*(?:억|백만|B|M)',
+            report_text, re.IGNORECASE
+        )
+        if len(revenue_years) >= 3:
+            years = [int(y[0]) for y in revenue_years]
+            vals = [float(y[1].replace(',', '')) for y in revenue_years]
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.bar(years, vals, color='#1e293b', alpha=0.85)
+            ax.set_title('Revenue Trend', fontsize=14, fontweight='bold')
+            for i, v in enumerate(vals):
+                ax.text(years[i], v * 1.02, f'{v:,.0f}', ha='center', fontsize=9)
+            plt.tight_layout()
+            path = os.path.join(output_dir, 'revenue_trend.png')
+            plt.savefig(path, dpi=150)
+            plt.close()
+            charts.append(path)
+
+        # 2. Risk matrix
+        risk_rows = re.findall(
+            r'\|\s*([^|]{3,30}?)\s*\|\s*(\d)\s*\|\s*(\d)\s*\|',
+            report_text
+        )
+        risk_data = [
+            (r[0].strip(), int(r[1]), int(r[2]))
+            for r in risk_rows
+            if r[1].isdigit() and r[2].isdigit()
+            and 1 <= int(r[1]) <= 5 and 1 <= int(r[2]) <= 5
+        ]
+        if len(risk_data) >= 3:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            for x in range(1, 6):
+                for y in range(1, 6):
+                    sev = x * y
+                    color = '#ff4444' if sev >= 15 else '#ffaa00' if sev >= 8 else '#44cc44'
+                    ax.add_patch(plt.Rectangle((x-0.5, y-0.5), 1, 1, color=color, alpha=0.2))
+            for name, prob, impact in risk_data[:10]:
+                ax.scatter(prob, impact, s=200, c='#1e293b', zorder=5,
+                          edgecolors='white', linewidth=1.5)
+                ax.annotate(name[:15], (prob, impact), textcoords="offset points",
+                           xytext=(10, 5), fontsize=7)
+            ax.set_xlim(0.5, 5.5); ax.set_ylim(0.5, 5.5)
+            ax.set_xlabel('Probability', fontsize=11)
+            ax.set_ylabel('Impact', fontsize=11)
+            ax.set_title('Risk Matrix', fontsize=14, fontweight='bold')
+            ax.set_xticks(range(1, 6)); ax.set_yticks(range(1, 6))
+            plt.tight_layout()
+            path = os.path.join(output_dir, 'risk_matrix.png')
+            plt.savefig(path, dpi=150)
+            plt.close()
+            charts.append(path)
+
+    except ImportError:
+        pass
+    except Exception as e:
+        log.warning("Chart generation error: %s", e)
+    return charts
+
+
 # ── Main entry point ─────────────────────────────────────────────────────────
 
 def _doc_title(mode: str) -> str:
@@ -830,6 +914,10 @@ def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = No
 
     story = []
 
+    # Generate charts before building PDF
+    charts_dir = str(reports_dir / f"{job_id}_charts")
+    chart_paths = _generate_charts(final_report_md, charts_dir)
+
     # Cover page
     story.extend(_build_cover(
         company, recommendation, styles,
@@ -844,6 +932,24 @@ def generate_pdf(state: dict[str, Any], job_id: str, output_dir: str | None = No
         ))
     else:
         story.append(_safe_para("No report content was generated.", styles["Body"]))
+
+    # Insert charts at the end of the report
+    if chart_paths:
+        story.append(Spacer(1, 12))
+        story.append(_safe_para("Charts &amp; Visualizations", styles["H2"]))
+        story.append(HRFlowable(
+            width="100%", thickness=0.5,
+            color=COLOR_HR, spaceAfter=8,
+        ))
+        avail_width = page_size[0] - 1.8 * inch
+        for chart_path in chart_paths:
+            try:
+                chart_img = RLImage(chart_path, width=avail_width, height=avail_width * 0.5)
+                chart_img.hAlign = 'CENTER'
+                story.append(chart_img)
+                story.append(Spacer(1, 12))
+            except Exception as e:
+                log.warning("Failed to insert chart %s: %s", chart_path, e)
 
     doc.build(story)
     return os.path.abspath(output_path)

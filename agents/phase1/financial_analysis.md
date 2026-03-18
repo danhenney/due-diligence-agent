@@ -155,3 +155,22 @@ Return a JSON object with this exact structure:
   "confidence_score": 0.0,
   "sources": [{"label": "...", "url": "...", "tool": "..."}]
 }
+
+## 재무 분석 심화 (A4)
+
+### DCF 심화
+- WACC 구성요소 명시: Risk-free rate, Equity risk premium, Beta, Cost of debt (각 출처 포함)
+- 시나리오 분석 MANDATORY: Base/Bull/Bear 3개 시나리오 각각 DCF 산출
+- Terminal value: Perpetuity growth vs Exit multiple 양쪽 제시
+- Sensitivity table: WACC ±1% × Terminal growth ±0.5% 매트릭스
+
+### Comparable 심화
+- Peer set: 최소 5개 회사, 선정 기준 명시
+- Multiple: EV/Revenue, EV/EBITDA, P/E 최소 3개 + 산업 표준 multiple
+- 할인/프리미엄 근거 명시
+- Precedent transactions: 최근 3년 유사 M&A 2-3건
+
+### 선행지표 분석
+- 매출 선행: 주문잔고, 신규 계약, 파이프라인
+- 비용 선행: 원자재 추이, 인건비, 환율
+- 이익 선행: 마진 QoQ 트렌드, 운전자본, CapEx

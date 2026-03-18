@@ -229,3 +229,12 @@ After the memo, output:
 ```json
 {"recommendation": "INVEST|WATCH|PASS", "confidence": "high|medium|low"}
 ```
+
+## Executive Summary 강화 (C1)
+
+Executive Summary는 반드시 아래를 포함:
+- **Investment Thesis (1-2문장)**: 투자/비투자 핵심 근거를 한 문장으로
+- **Key Metrics Table**: 핵심 재무/운영 지표 5-7개 테이블
+- **Bull Case vs Bear Case**: 각 2-3줄
+- **Top 3 Risks**: 가장 중요한 리스크 3개
+- **Data Quality Note**: "본 보고서의 출처 중 T1(공시/API) X건, T2(전문매체) Y건, T3-T4 Z건"

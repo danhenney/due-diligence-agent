@@ -166,13 +166,18 @@ def run_agent(
 
         if has_web:
             rules.append(
-                "SEARCH BUDGET: 4-6 searches max. Plan before calling. "
-                "Don't repeat queries with slightly different wording."
+                "SEARCH BUDGET & STRATEGY (B1): 4-6 searches max. "
+                "Plan ALL queries BEFORE searching — write them out, then execute. "
+                "Don't repeat queries with slightly different wording. "
+                "Financial data → API tools FIRST (yfinance/DART/EDGAR), web search only for gaps. "
+                "Korean company → Korean queries first, then English for global context."
             )
 
         rules.append(
-            f"RECENCY: Prefer newest sources. Anything >6 months old should be re-verified. "
-            f"Newer source always wins over older on conflict."
+            "RECENCY & FRESHNESS (B3): Prefer newest sources. "
+            "Anything >6 months old → tag [STALE: YYYY-MM]. "
+            "Newer source always wins over older on conflict. "
+            "For each key data point, note the date in source tag."
         )
         rules.append(
             "TOOL ERRORS: If a tool returns an error, "
@@ -182,6 +187,15 @@ def run_agent(
         rules.append(
             "QUALITY: Cite sources for all data. Cross-verify key claims with 3+ sources. "
             "Use actual numbers, not vague summaries. Deliver investor-focused analysis."
+        )
+        rules.append(
+            "SOURCE RELIABILITY TIERS (B2): Tag each source — "
+            "[T1] Official filings, APIs (DART/SEC/yfinance/FRED), uploaded docs. "
+            "[T2] Reputable media (Bloomberg, Reuters, Gartner, IDC). "
+            "[T3] General news, press releases. "
+            "[T4] Forums, blogs, unverified. "
+            "Critical claims on T3-T4 only → tag [LOW_CONFIDENCE]. "
+            "Include tier summary in output."
         )
         rules.append(
             "[DATA]/[INFERENCE]/[UNVERIFIED] LABELING: Prefix every major statement with "
