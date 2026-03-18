@@ -62,7 +62,7 @@ def st_search_apps(
     if not SENSOR_TOWER_API_TOKEN:
         return _NO_KEY
     try:
-        data = _get(f"{os}/search_entities", {"term": query, "limit": limit})
+        data = _get(f"{os}/search_entities", {"term": query, "limit": limit, "entity_type": "app"})
         apps = []
         if isinstance(data, list):
             for app in data[:limit]:
