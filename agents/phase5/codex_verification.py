@@ -251,7 +251,7 @@ def _parse_overall(text: str) -> tuple[str, list[str]]:
 
 
 def _run_codex(content: str, prompt: str, company: str, phase_name: str,
-               model: str = "o4-mini") -> dict:
+               model: str = "") -> dict:
     """Run codex exec on content, return result dict with status/overall/content."""
     if not content.strip():
         log.warning("[codex-%s] No content, skipping", phase_name)
@@ -462,7 +462,7 @@ def run_final(state: dict) -> dict:
     # Build enhanced Phase 4 prompt (#1 #2 #3 #4)
     prompt = _build_final_prompt(lang, content, ground_truth=ground_truth)
 
-    # Run with o3 model (#5)
+    # Run with default model (#5)
     result = _run_codex(content, prompt, company, "final", model=CODEX_MODEL_PHASE4)
 
     # #7 Double-pass false positive filter (only if FAIL)
