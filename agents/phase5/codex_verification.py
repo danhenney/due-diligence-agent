@@ -32,8 +32,10 @@ log = logging.getLogger(__name__)
 
 # ── Model selection ─────────────────────────────────────────────────────────
 
-CODEX_MODEL_PHASE1_3 = os.environ.get("CODEX_MODEL_PHASE1_3", "o4-mini")
-CODEX_MODEL_PHASE4 = os.environ.get("CODEX_MODEL_PHASE4", "o3")
+# Default: omit --model flag so Codex CLI uses its default (currently gpt-5.4)
+# ChatGPT accounts don't support o3/o4-mini via codex exec
+CODEX_MODEL_PHASE1_3 = os.environ.get("CODEX_MODEL_PHASE1_3", "")
+CODEX_MODEL_PHASE4 = os.environ.get("CODEX_MODEL_PHASE4", "")
 
 
 # ── Adversarial framing (#4) ────────────────────────────────────────────────
@@ -263,9 +265,10 @@ def _run_codex(content: str, prompt: str, company: str, phase_name: str,
         f.write(content)
 
     try:
-        cmd = [
-            "codex", "exec",
-            "--model", model,
+        cmd = ["codex", "exec"]
+        if model:
+            cmd += ["--model", model]
+        cmd += [
             "-C", tmpdir,
             "-s", "read-only",
             "--skip-git-repo-check",
