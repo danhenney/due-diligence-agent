@@ -6,7 +6,7 @@ import threading
 
 from tools import tavily_tools, edgar_tools, dart_tools, pdf_tools, yfinance_tools
 from tools import pytrends_tools, fred_tools, github_tools, patents_tools
-from tools import kipris_tools, kosis_tools
+from tools import kipris_tools, kosis_tools, sensortower_tools
 
 # ── Per-run tool result cache ────────────────────────────────────────────────
 # Keyed on (tool_name, frozen_input). Shared across threads within a single
@@ -55,12 +55,16 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             pytrends_tools.GOOGLE_TRENDS_RELATED_TOOL,
             kosis_tools.KOSIS_SEARCH_TABLES_TOOL,
             kosis_tools.KOSIS_GET_STATISTICS_TOOL,
+            sensortower_tools.ST_SEARCH_APPS_TOOL,
+            sensortower_tools.ST_TOP_CHARTS_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
         "competitor_analysis": [
             tavily_tools.WEB_SEARCH_TOOL,
             yfinance_tools.YF_GET_INFO_TOOL,
+            sensortower_tools.ST_SEARCH_APPS_TOOL,
+            sensortower_tools.ST_SALES_ESTIMATES_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
@@ -84,6 +88,8 @@ def get_tools_for_agent(agent_type: str) -> list[dict]:
             patents_tools.SEARCH_PATENTS_TOOL,
             kipris_tools.KIPRIS_SEARCH_PATENTS_TOOL,
             kipris_tools.KIPRIS_SEARCH_BY_APPLICANT_TOOL,
+            sensortower_tools.ST_SEARCH_APPS_TOOL,
+            sensortower_tools.ST_SALES_ESTIMATES_TOOL,
             pdf_tools.EXTRACT_PDF_TEXT_TOOL,
             pdf_tools.EXTRACT_PDF_TABLES_TOOL,
         ],
@@ -175,6 +181,9 @@ _TOOL_DISPATCH: dict[str, object] = {
     "kipris_search_by_applicant":  kipris_tools,
     "kosis_get_statistics":        kosis_tools,
     "kosis_search_tables":         kosis_tools,
+    "st_search_apps":              sensortower_tools,
+    "st_sales_estimates":          sensortower_tools,
+    "st_top_charts":               sensortower_tools,
 }
 
 
@@ -212,6 +221,9 @@ def _fallback_for(tool_name: str) -> str:
         "kipris_search_by_applicant":   "web_search",
         "kosis_get_statistics":         "web_search",
         "kosis_search_tables":          "web_search",
+        "st_search_apps":               "web_search",
+        "st_sales_estimates":           "web_search",
+        "st_top_charts":                "web_search",
     }
     return _fallbacks.get(tool_name, "web_search")
 

@@ -36,6 +36,9 @@ KIPRIS_API_KEY = os.getenv("KIPRIS_API_KEY", "")
 # Optional — KOSIS Korean national statistics (free key at kosis.kr/openapi)
 KOSIS_API_KEY = os.getenv("KOSIS_API_KEY", "")
 
+# Optional — Sensor Tower app intelligence (enterprise, sensortower.com)
+SENSOR_TOWER_API_TOKEN = os.getenv("SENSOR_TOWER_API_TOKEN", "")
+
 # Persistence
 CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./checkpoints.db")
 
