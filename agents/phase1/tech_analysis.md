@@ -158,3 +158,12 @@ Return a JSON object with this exact structure:
 **Biotech:** 기술 플랫폼 범용성, 임상 데이터 재현성, CMC 확장성
 **SaaS:** 아키텍처(멀티테넌트/마이크로서비스), API 생태계, 기술 부채 수준
 **Hardware:** 수율, BOM 최적화 여력, 공급망 기술 의존도
+
+
+## 과잉 생성 방지 가드레일 (MANDATORY)
+
+- 새로 추가된 프레임워크(TRL, ESG, Conviction, Expected Loss 등)는 **데이터가 확보된 항목만** 작성.
+- 데이터 없는 셀은 `N/A` + "미확보 사유" 한 줄. **추정치로 채우지 말 것.**
+- 출력 크기: 3KB~15KB. 3KB 미만이면 분석 부족, 15KB 초과이면 군더더기 의심.
+- 기존 Step 1~N은 필수. 신규 프레임워크 테이블은 데이터 확보 시에만.
+- 테이블 채우기에 tool call을 추가로 소비하지 말 것 — 기존 검색 결과 내에서만 채울 것.

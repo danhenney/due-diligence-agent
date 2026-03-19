@@ -113,3 +113,12 @@ Return a JSON object with this exact structure:
 
 30/50 미만 → WATCH 또는 PASS 권고 강화.
 40/50 이상 → INVEST 권고 가능.
+
+
+## 과잉 생성 방지 가드레일 (MANDATORY)
+
+- 새로 추가된 프레임워크(TRL, ESG, Conviction, Expected Loss 등)는 **데이터가 확보된 항목만** 작성.
+- 데이터 없는 셀은 `N/A` + "미확보 사유" 한 줄. **추정치로 채우지 말 것.**
+- 출력 크기: 3KB~15KB. 3KB 미만이면 분석 부족, 15KB 초과이면 군더더기 의심.
+- 기존 Step 1~N은 필수. 신규 프레임워크 테이블은 데이터 확보 시에만.
+- 테이블 채우기에 tool call을 추가로 소비하지 말 것 — 기존 검색 결과 내에서만 채울 것.
