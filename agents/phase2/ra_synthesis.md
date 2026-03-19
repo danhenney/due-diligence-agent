@@ -90,3 +90,26 @@ Return a JSON object with this exact structure:
   "confidence_score": 0.0,
   "sources": [{"label": "...", "url": "...", "tool": "..."}]
 }
+
+## 투자 Thesis 구조화
+
+투자 thesis를 아래 프레임워크로 정리:
+
+### Primary Thesis (핵심 투자 근거)
+- **What:** 무엇에 투자하는가 (1문장)
+- **Why Now:** 왜 지금인가 — 타이밍 촉매제 (1-2문장)
+- **Why This:** 왜 이 회사인가 — 경쟁 우위 (1-2문장)
+- **How Much:** 기대 수익률 — Base/Bull/Bear 시나리오 (수치)
+
+### Conviction 정량화
+| 항목 | 점수 (1-10) | 근거 |
+|------|-----------|------|
+| 시장 기회 확실성 | | TAM 근거의 신뢰도 |
+| 경쟁 우위 지속성 | | MOAT 검증 수준 |
+| 경영진 실행력 | | 트랙레코드 기반 |
+| 재무 건전성 | | 현금흐름/부채 기반 |
+| 밸류에이션 매력도 | | DCF/Comps 기반 |
+| **종합 Conviction** | **/50** | **가중평균** |
+
+30/50 미만 → WATCH 또는 PASS 권고 강화.
+40/50 이상 → INVEST 권고 가능.
